@@ -1,6 +1,7 @@
 /* lirc.c                                                                     */
 /*                                                                            */
 /* Dummy LIRC client to flash LED on IR signal                                */ 
+/* Needs additional work on timings                                           */
 /*                                                                            */
 /* Author : Geert Lorang <geert |AT| lorang.be> - 2014-09-29                  */
 /*                                                                            */
@@ -28,7 +29,7 @@ if(!fp_led) {
 // Initiate LIRC. 
 if(lirc_init("lirc",1) == -1) {
         printf("Could not init LIRC\n");
-        return -1;
+	return -1;
 }
 
 // Each time we receive an IR code, blink LED
@@ -41,7 +42,7 @@ while(lirc_nextcode(&code)==0)
         fprintf(fp_led, "%d\n", 1);
         fflush(fp_led);
 
-        usleep(77000);
+        usleep(300000);
 
         fprintf(fp_led, "%d\n", 0);
         fflush(fp_led);
@@ -56,5 +57,6 @@ lirc_deinit();
 // Close LED device file
 fclose(fp_led);
 
-return 0;
+exit(0);
 }
+

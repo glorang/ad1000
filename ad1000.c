@@ -147,12 +147,12 @@ int main() {
                         if(sscanf(buffer, "%d", &led2)) {
                                 switch(led2) {
                                         /* Both leds 2 & 3 are controlled by a single byte */
-                                        /* Substract value to turn on, otherwise both leds will shut */
+                                        /* flip bits 6 & 7 */
 
                                         /* off */
-                                        case 0: display[9] -= 0xC0; break;
+                                        case 0: display[9] &= ~(1 << 6); display[9] &= ~(1 << 7); break;
                                         /* on */
-                                        case 1: display[9] += 0xC0; break;
+                                        case 1: display[9] |= 1 << 6;  display[9] |= 1 << 7; break;
                                 }
                                 spi_update();
                         }
@@ -163,12 +163,12 @@ int main() {
                         if(sscanf(buffer, "%d", &led3)) {
                                 switch(led3) {
                                         /* Both leds 2 & 3 are controlled by a single byte */
-                                        /* Substract value to turn on, otherwise both leds will shut */
+                                        /* flip bits 4 & 5 */
 
                                         /* off */
-                                        case 0: display[9] -= 0x30; break;
+                                        case 0: display[9] &= ~(1 << 4); display[9] &= ~(1 << 5); break;
                                         /* on */
-                                        case 1: display[9] += 0x30; break;
+                                        case 1: display[9] |= 1 << 4; display[9] |= 1 << 5; break;
                                 }
                                 spi_update();
                         }

@@ -8,7 +8,6 @@
 /*                                                                            */
 /* BUGS : Buttons don't work (yet)                                            */
 /* TODO: Proper stop/start / daemonize                                        */
-/*       Decimal seperators (they work, but not yet implemented)              */ 
 /*                                                                            */
 /* Compile with: gcc ad1000.c -o ad1000 -l bcm2835                            */
 /* Stop with: kill $(pidof ad1000)                                            */
@@ -42,9 +41,8 @@ const char brightness_levels[] = { 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF
 /* Define all digits an hex symbols */
 const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         // 0 1 2 3
                         0x66, 0xB6, 0xBE, 0xE0,         // 4 5 6 7
-                        0xFE, 0xF6, 0xEE, 0xFE,         // 8 9 A B
-                        0x9C, 0xFC, 0x9E, 0x8E          // C D E F
-                        };
+                        0xFE, 0xF6, 0x02                // 8 9 - 
+                      };
 
 /*                                                                                   */
 /*                 ????  DIG1  PWRG  DIG2  PWRR  DIG3  ????  DIG4  ????  LEDS, ????  */
@@ -120,9 +118,6 @@ int main() {
         /* as only this buffer has a possible variable length */
         int bytes_read = 0;
 
-        /* ints that will store digits[] indexes */
-        int number = 0, dig1 = 0, dig2 = 0, dig3 = 0, dig4 = 0;
-
         /* Main loop - read all FIFOs and act as needed */
 
         while(1) {
@@ -190,46 +185,44 @@ int main() {
                 }
 
                 /* Process Display FIFO */
-                if( (bytes_read = fread(buffer, 1, 8, fp_disp)) ) {
+                if( (bytes_read = fread(buffer, 1, 9, fp_disp)) ) {
                         /* We can get variable length input. e.g : */
                         /* 234 or 1.2.3.4. or 12.34 */
                         /* so create new buffer with exact length */
                         char result[bytes_read+1];
                         result[bytes_read] = '\0';
                         memcpy(result, buffer, bytes_read);
-                        
-                        if(sscanf(result, "%d", &number)) {
-                                if(number < 0) {
-                                        setDisplayOff();
-                                } else {
-                                        
-                                        if(number >= 1000) {
-                                                dig1 = number / 1000;
-                                                number = number % 1000;
-                                        } else { dig1 = 0 ; }
 
-                                        if(number >= 100) {
-                                                dig2 = number / 100;
-                                                number = number % 100;
-                                        } else { dig2 = 0; }
+                        /* we start with the most right digit */
+                        int current_digit = 3;
 
-                                        if(number >= 10) {
-                                                dig3 = number / 10;
-                                                dig4 = number % 10;
-                                        } else {
-                                                dig3 = 0;
-                                                dig4 = number;
-                                        }
+                        /* array for each digit */
+                        char dig[4] = { 0x00 } ;
+                    
+                        int i, num;
 
-                                        display[1] = digits[dig1];
-                                        display[3] = digits[dig2];
-                                        display[5] = digits[dig3];
-                                        display[7] = digits[dig4];
-                                        setDisplayOn(brightness);
-                                        spi_update();
-                               }
+                        /* We loop over the input in reverse order */
+                        for(i=bytes_read-1;i>=0;i--) {
+                                /* Set current digit to to it's binary representation as defined in digits[] */
+                                if(result[i] >= 0x30 && result[i] <= 0x39) {
+                                        num = result[i] - 0x30;
+                                        dig[current_digit] += digits[num];
+                                        current_digit--;
+                                } else if(result[i] == '-') {
+                                        dig[current_digit] += digits[10];
+                                        current_digit--;
+                                /* to enable the dot you need to flip the last bit (0000 0001) of it's value in digits[] */
+                                } else if(result[i] == '.') {
+                                        dig[current_digit] += 0x01;
+                                }
                         }
 
+                        display[1] = dig[0];
+                        display[3] = dig[1];
+                        display[5] = dig[2];
+                        display[7] = dig[3];
+                        setDisplayOn(brightness);
+                        spi_update();
                 }
                 
                 /* Sleep 0.5s */
@@ -272,26 +265,26 @@ int spi_init() {
         if (!bcm2835_init())
                 return 1;
         
-        // Setup SPI connection & settings
+        /* Setup SPI connection & settings */
         bcm2835_spi_begin();
-        bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST); // no effect
+        bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);
         bcm2835_spi_setDataMode(BCM2835_SPI_MODE0);
         bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_65536);
         bcm2835_spi_chipSelect(BCM2835_SPI_CS0);
         bcm2835_spi_setChipSelectPolarity(BCM2835_SPI_CS0, LOW);
 
-        // Normal operation, incr addr, write to display
+        /* Normal operation, incr addr, write to display */
         bcm2835_spi_transfer(0x02);
 
-        // Clear memory
+        /* Clear memory */
         bcm2835_spi_transfer(0x03);
         char clearmem[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
         bcm2835_spi_transfern(clearmem, sizeof(clearmem));
 
-        // Set default brightness, display on
+        /* Set default brightness, display on */
         setDisplayOn(2);
 
-        // Set start address
+        /* Set start address */
         bcm2835_spi_transfer(0x03);
 
         return 0;

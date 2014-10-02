@@ -19,11 +19,13 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/select.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
 #include <signal.h>
+#include <errno.h>
 #include <bcm2835.h>
 
 /* constant definitions */
@@ -77,6 +79,7 @@ void spi_update();
 void spi_end();
 void setDisplayOn(int brightness);
 void setDisplayOff();
+char * readFIFO(int fd);
 
 int main() {
 
@@ -95,21 +98,32 @@ int main() {
                 return -1;
         }
 
-        /* File pointers for each FIFO */
-        FILE *fp_led1, *fp_led2, *fp_led3, *fp_disp, *fp_dispbr;
-        fp_led1 = fdopen(open(DEV_LED1, O_RDONLY | O_NONBLOCK), "r");
-        fp_led2 = fdopen(open(DEV_LED2, O_RDONLY | O_NONBLOCK), "r");
-        fp_led3 = fdopen(open(DEV_LED3, O_RDONLY | O_NONBLOCK), "r");
-        fp_disp = fdopen(open(DEV_DISP, O_RDONLY | O_NONBLOCK), "r");
-        fp_dispbr = fdopen(open(DEV_DISP_BRIGHTNESS, O_RDONLY | O_NONBLOCK), "r");
+        /* File descriptors for each FIFO */
+        int fd_led1, fd_led2, fd_led3, fd_disp, fd_dispbr;
+        fd_led1 = open(DEV_LED1, O_RDWR | O_NONBLOCK);
+        fd_led2 = open(DEV_LED2, O_RDWR | O_NONBLOCK);
+        fd_led3 = open(DEV_LED3, O_RDWR | O_NONBLOCK);
+        fd_disp = open(DEV_DISP, O_RDWR | O_NONBLOCK);
+        fd_dispbr = open(DEV_DISP_BRIGHTNESS, O_RDWR | O_NONBLOCK);
 
-        if(fp_led1 < 0 || fp_led2 < 0 || fp_led3 < 0 || fp_disp < 0 || fp_dispbr < 0) {
+        if(fd_led1 < 0 || fd_led2 < 0 || fd_led3 < 0 || fd_disp < 0 || fd_dispbr < 0) {
                 /* Could not open all FIFOs */
                 return -1;
         }
 
+        /* Create master 'select' to monitor for changes */
+        fd_set master;
+
+        /* add all file descriptors to the master */
+        FD_ZERO(&master);
+        FD_SET(fd_led1, &master);
+        FD_SET(fd_led2, &master);
+        FD_SET(fd_led3, &master);
+        FD_SET(fd_disp, &master);
+        FD_SET(fd_dispbr, &master);
+
         /* buffers to store input */
-        char buffer[8] = { 0x00 } ;
+        char *buffer;
         int led1;
         int led2;
         int led3;
@@ -118,115 +132,152 @@ int main() {
         /* as only this buffer has a possible variable length */
         int bytes_read = 0;
 
+        /* int to loop over all file descriptors in the select */
+        int fd;
+
+
         /* Main loop - read all FIFOs and act as needed */
-
         while(1) {
-                /* Process LED1 FIFO */
-                if(fread(buffer, 2, 1, fp_led1)) {
-                        if(sscanf(buffer, "%d", &led1)) {
-                                display[2] = 0x00;
-                                display[4] = 0x00;
 
-                                switch(led1) {
-                                        /* off */ 
-                                        case 0: display[2] = 0x00; display[4] = 0x00; break;
-                                        /* green */
-                                        case 1: display[2] = 0xF0; break;
-                                        /* red */
-                                        case 2: display[4] = 0xF0; break;
-                                        /* orange */
-                                        case 3: display[2] = 0xF0; display[4] = 0xF0; break;
-                                }
-
-                                spi_update();
-                        }
+                /* backup master */
+                fd_set dup = master;
+                if (select(FD_SETSIZE, &dup, NULL, NULL, NULL) < 0) {
+                        return -1;
                 }
 
-                /* Process LED2 FIFO */
-                if(fread(buffer, 2, 1, fp_led2)) {
-                        if(sscanf(buffer, "%d", &led2)) {
-                                switch(led2) {
-                                        /* Both leds 2 & 3 are controlled by a single byte */
-                                        /* flip bits 6 & 7 */
+                for (fd=0;fd<FD_SETSIZE;fd++) {
+                        if(FD_ISSET(fd, &dup)) {
 
-                                        /* off */
-                                        case 0: display[9] &= ~(1 << 6); display[9] &= ~(1 << 7); break;
-                                        /* on */
-                                        case 1: display[9] |= 1 << 6;  display[9] |= 1 << 7; break;
+                                /* Process LED1 FIFO */
+                                if(fd == fd_led1) {
+
+                                        buffer = readFIFO(fd_led1); 
+                                        
+                                        if(sscanf(buffer, "%d", &led1)) {
+                                                display[2] = 0x00;
+                                                display[4] = 0x00;
+                                        
+                                                switch(led1) {
+                                                        /* off */ 
+                                                        case 0: display[2] = 0x00; display[4] = 0x00; break;
+                                                        /* green */
+                                                        case 1: display[2] = 0xF0; break;
+                                                        /* red */
+                                                        case 2: display[4] = 0xF0; break;
+                                                        /* orange */
+                                                        case 3: display[2] = 0xF0; display[4] = 0xF0; break;
+                                                }
+                                        
+                                                spi_update();
+                                        }
+
+                                        free(buffer);
                                 }
-                                spi_update();
+
+                                /* Process LED2 FIFO */
+                                if(fd == fd_led2) {
+
+                                        buffer = readFIFO(fd_led2);
+
+                                        if(sscanf(buffer, "%d", &led2)) {
+                                                switch(led2) {
+                                                        /* Both leds 2 & 3 are controlled by a single byte */
+                                                        /* flip bits 6 & 7 */
+
+                                                        /* off */
+                                                        case 0: display[9] &= ~(1 << 6); display[9] &= ~(1 << 7); break;
+                                                        /* on */
+                                                        case 1: display[9] |= 1 << 6;  display[9] |= 1 << 7; break;
+                                                }
+                                                spi_update();
+                                        }
+
+                                        free(buffer);
+                                }
+
+                                /* Process LED3 FIFO */
+                                if(fd == fd_led3) {
+
+                                        buffer = readFIFO(fd_led3);
+
+                                        if(sscanf(buffer, "%d", &led3)) {
+                                                switch(led3) {
+                                                        /* Both leds 2 & 3 are controlled by a single byte */
+                                                        /* flip bits 4 & 5 */
+
+                                                        /* off */
+                                                        case 0: display[9] &= ~(1 << 4); display[9] &= ~(1 << 5); break;
+                                                        /* on */
+                                                        case 1: display[9] |= 1 << 4; display[9] |= 1 << 5; break;
+                                                }
+                                                spi_update();
+                                        }
+                                
+                                        free(buffer);
+                                }
+
+                                /* Process Brightness FIFO */
+                                if(fd == fd_dispbr) {
+
+                                        buffer = readFIFO(fd_dispbr);
+
+                                        if(sscanf(buffer, "%d", &brightness)) {
+                                                /* 8 brightness levels are available, make sure we don't go out-of-index */
+                                                if(brightness >= 0 && brightness <= 7) {
+                                                       setDisplayOn(brightness);
+                                                }
+                                        }
+
+                                        free(buffer);
+                                }
+
+                                /* Process Display FIFO */
+                                if(fd == fd_disp) {
+
+                                        buffer = readFIFO(fd_disp);
+                                        bytes_read = strlen(buffer);
+                                        /* We can get variable length input. e.g : */
+                                        /* 234 or 1.2.3.4. or 12.34 */
+                                        /* so create new buffer with exact length */
+                                        char result[bytes_read+1];
+                                        result[bytes_read] = '\0';
+                                        memcpy(result, buffer, bytes_read);
+
+                                        /* we start with the most right digit */
+                                        int current_digit = 3;
+
+                                        /* array for each digit */
+                                        char dig[4] = { 0x00 } ;
+                                    
+                                        int i, num;
+
+                                        /* We loop over the input in reverse order */
+                                        for(i=bytes_read-1;i>=0;i--) {
+                                                /* Set current digit to to it's binary representation as defined in digits[] */
+                                                if(result[i] >= 0x30 && result[i] <= 0x39) {
+                                                        num = result[i] - 0x30;
+                                                        dig[current_digit] += digits[num];
+                                                        current_digit--;
+                                                } else if(result[i] == '-') {
+                                                        dig[current_digit] += digits[10];
+                                                        current_digit--;
+                                                /* to enable the dot you need to flip the last bit (0000 0001) of it's value in digits[] */
+                                                } else if(result[i] == '.') {
+                                                        dig[current_digit] += 0x01;
+                                                }
+                                        }
+
+                                        display[1] = dig[0];
+                                        display[3] = dig[1];
+                                        display[5] = dig[2];
+                                        display[7] = dig[3];
+                                        setDisplayOn(brightness);
+                                        spi_update();
+
+                                        free(buffer);
+                                }
                         }
                 }
-
-                /* Process LED3 FIFO */
-                if(fread(buffer, 2, 1, fp_led3)) {
-                        if(sscanf(buffer, "%d", &led3)) {
-                                switch(led3) {
-                                        /* Both leds 2 & 3 are controlled by a single byte */
-                                        /* flip bits 4 & 5 */
-
-                                        /* off */
-                                        case 0: display[9] &= ~(1 << 4); display[9] &= ~(1 << 5); break;
-                                        /* on */
-                                        case 1: display[9] |= 1 << 4; display[9] |= 1 << 5; break;
-                                }
-                                spi_update();
-                        }
-                }
-
-                /* Process Brightness FIFO */
-                if(fread(buffer, 2, 1, fp_dispbr)) {
-                        if(sscanf(buffer, "%d", &brightness)) {
-                                /* 8 brightness levels are available, make sure we don't go out-of-index */
-                                if(brightness >= 0 && brightness <= 7) {
-                                       setDisplayOn(brightness);
-                                }
-                        }
-                }
-
-                /* Process Display FIFO */
-                if( (bytes_read = fread(buffer, 1, 9, fp_disp)) ) {
-                        /* We can get variable length input. e.g : */
-                        /* 234 or 1.2.3.4. or 12.34 */
-                        /* so create new buffer with exact length */
-                        char result[bytes_read+1];
-                        result[bytes_read] = '\0';
-                        memcpy(result, buffer, bytes_read);
-
-                        /* we start with the most right digit */
-                        int current_digit = 3;
-
-                        /* array for each digit */
-                        char dig[4] = { 0x00 } ;
-                    
-                        int i, num;
-
-                        /* We loop over the input in reverse order */
-                        for(i=bytes_read-1;i>=0;i--) {
-                                /* Set current digit to to it's binary representation as defined in digits[] */
-                                if(result[i] >= 0x30 && result[i] <= 0x39) {
-                                        num = result[i] - 0x30;
-                                        dig[current_digit] += digits[num];
-                                        current_digit--;
-                                } else if(result[i] == '-') {
-                                        dig[current_digit] += digits[10];
-                                        current_digit--;
-                                /* to enable the dot you need to flip the last bit (0000 0001) of it's value in digits[] */
-                                } else if(result[i] == '.') {
-                                        dig[current_digit] += 0x01;
-                                }
-                        }
-
-                        display[1] = dig[0];
-                        display[3] = dig[1];
-                        display[5] = dig[2];
-                        display[7] = dig[3];
-                        setDisplayOn(brightness);
-                        spi_update();
-                }
-                
-                /* Sleep 0.5s */
-                nanosleep((struct timespec[]){{0, 500000000}}, NULL);
         }
         return 0;
 }
@@ -306,3 +357,27 @@ void setDisplayOff() {
 void setDisplayOn(int brightness) {
         bcm2835_spi_transfer(brightness_levels[brightness]);
 }
+
+
+char * readFIFO(int fd) {
+        char *buffer = calloc(1, 9);
+        ssize_t bytes;
+
+        while (1) {
+                bytes = read(fd, buffer, 9);
+
+                if(bytes < 0) {
+                        if (errno == EWOULDBLOCK) {
+                                /* done reading */
+                                break;
+                        } else {
+                                /* read failed, should not occur */
+                                perror("Read failed");
+                                return NULL;
+                        }
+                }
+        }
+
+        return buffer;
+}
+

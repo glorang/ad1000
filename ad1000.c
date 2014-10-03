@@ -6,7 +6,6 @@
 /*                                                                            */
 /* Author : Geert Lorang <geert |AT| lorang.be> - 2014-09-28                  */
 /*                                                                            */
-/* BUGS : Buttons don't work (yet)                                            */
 /* TODO: Proper stop/start / daemonize                                        */
 /*                                                                            */
 /* Compile with: gcc ad1000.c -o ad1000 -l bcm2835                            */
@@ -42,7 +41,36 @@ const char brightness_levels[] = { 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF
 const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         // 0 1 2 3
                         0x66, 0xB6, 0xBE, 0xE0,         // 4 5 6 7
                         0xFE, 0xF6, 0x02                // 8 9 - 
-                      };
+};
+
+/* Define key names of buttons */
+/* Those should match with the config in lircd.conf */
+const char * keynames[] = { 
+         "KEY_LEFT", "KEY_OK",   "KEY_RIGHT", "KEY_UP", 
+         "KEY_DOWN", "KEY_MENU", "KEY_PAUSE", "KEY_RECORD",
+         "KEY_PREV", "KEY_PLAY", "KEY_NEXT",  "KEY_BACK",
+         "KEY_STOP", "KEY_EXIT", "KEY_POWER"
+};
+
+/* Define scancode of each button */
+const int keycodes[15][3] = { 
+         { 0x00, 0x00, 0x80 },       // left   
+         { 0x00, 0x00, 0x40 },       // ok     
+         { 0x00, 0x00, 0x04 },       // right  
+         { 0x04, 0x00, 0x00 },       // up     
+         { 0x00, 0x04, 0x00 },       // down   
+         { 0x02, 0x00, 0x00 },       // menu   
+         { 0x00, 0x40, 0x00 },       // pause  
+         { 0x00, 0x02, 0x00 },       // record 
+         { 0x40, 0x00, 0x00 },       // prev   
+         { 0x08, 0x00, 0x00 },       // play   
+         { 0x00, 0x08, 0x00 },       // next   
+         { 0x00, 0x00, 0x20 },       // back   
+         { 0x00, 0x80, 0x00 },       // stop   
+         { 0x00, 0x20, 0x00 },       // exit   
+         { 0x80, 0x00, 0x00 }        // power   
+};
+
 
 /*                                                                                   */
 /*                 ????  DIG1  PWRG  DIG2  PWRR  DIG3  ????  DIG4  ????  LEDS, ????  */
@@ -118,9 +146,43 @@ int main() {
         /* as only this buffer has a possible variable length */
         int bytes_read = 0;
 
-        /* Main loop - read all FIFOs and act as needed */
+        /* int to lookup key index of pressed button */
+        int row;
 
+        /* variables for irsend */
+        char command[100];
+        int count = 0;
+        int prev = -1;
+
+        /* Main loop - read all FIFOs and act as needed */
         while(1) {
+
+                /* check if any key was pressed */
+
+                /* read key data */
+                char read[]  =  { 0x42, 0xFF, 0xFF, 0xFF };         
+                bcm2835_spi_transfern(read, sizeof(read));
+
+                for(row=0;row<15;row++) {
+                        if(read[1] == keycodes[row][0] && read[2] == keycodes[row][1]  && read[3] == keycodes[row][2]) {
+
+                                /* keep track of how many times same button is pressed */
+                                if(prev == row) { count++; } else { prev = row; count=0; }
+                                
+                                /* send fake lirc simulate command */
+                                /* FIXME: we use system() - maybe better to write to LIRCd socket? */
+                                /* FIXME: first code in irsend command  is deprecated, but maybe we need it? */
+                                /* FIXME: how to get IR remote name from lirc_client?! */
+                                sprintf(command, "irsend simulate \"0000000000000000 %02x %s DEFAULT\"", count, keynames[row]);
+                                system(command);
+
+                                /* sleep a bit before reading in next key sequence */
+                                /* this will also delay led/display update for 0.2s, but user is pressing buttons */
+                                usleep(200000);
+                                break;
+                        }
+                }
+
                 /* Process LED1 FIFO */
                 if(fread(buffer, 2, 1, fp_led1)) {
                         if(sscanf(buffer, "%d", &led1)) {
@@ -225,8 +287,8 @@ int main() {
                         spi_update();
                 }
                 
-                /* Sleep 0.5s */
-                nanosleep((struct timespec[]){{0, 500000000}}, NULL);
+                /* Sleep 0.1s */
+                usleep(100000);
         }
         return 0;
 }

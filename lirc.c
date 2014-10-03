@@ -15,10 +15,12 @@
 
 #define DEV_LED "/dev/ad1000/led2"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char * argv[]) {
 
 char *code;
 FILE *fp_led = fopen(DEV_LED, "w");
+int keycode, sequence;
+char key, remote;
 
 // Open LED device file
 if(!fp_led) { 
@@ -39,13 +41,18 @@ while(lirc_nextcode(&code)==0)
         //then skip lines below and start while loop again.
         if(code == NULL) continue;  
 
-        fprintf(fp_led, "%d\n", 1);
-        fflush(fp_led);
+                /* Only blink on first occurence to save CPU cycles */
+                if(sscanf(code, "%d %d %s %s",&keycode, &sequence, key, remote)) {
+                        if(sequence == 0) {
+                                fprintf(fp_led, "%d\n", 1);
+                                fflush(fp_led);
 
-        usleep(300000);
+                                usleep(100000);
 
-        fprintf(fp_led, "%d\n", 0);
-        fflush(fp_led);
+                                fprintf(fp_led, "%d\n", 0);
+                                fflush(fp_led);
+                         }
+                }
 
         //Need to free up code before the next loop
         free(code);
@@ -57,6 +64,6 @@ lirc_deinit();
 // Close LED device file
 fclose(fp_led);
 
-exit(0);
+return 0;
 }
 

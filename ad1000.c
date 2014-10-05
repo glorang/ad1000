@@ -34,13 +34,24 @@
 #define DEV_DISP DEV_DIR "disp"
 #define DEV_DISP_BRIGHTNESS DEV_DIR "disp_brightness"
 
+
+/* key scanning timings */
+/* When we start we read in keydata each MAX_SLEEP (1s) seconds */
+/* As soon as a button is pressed we scan for keydata each MIN_SLEEP (0.17s) seconds */
+/* After KEY_SCAN_LOW (10s) we scan again every MAX_SLEEP (1s) seconds */
+/* This reduces CPU usage drastically, writing every 0.01 on the SPI bus increases CPU usage too much */
+#define DELAY_TIME 10000        /* 0.01 second */
+#define MIN_SLEEP 170000        /* 0.17 second */
+#define MAX_SLEEP 1000000       /* 1 second */
+#define KEY_SCAN_LOW 10000000    /* 10 seconds */
+
 /* Brightness levels (low to high) */
 const char brightness_levels[] = { 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF1 };
 
 /* Define all digits an hex symbols */
-const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         // 0 1 2 3
-                        0x66, 0xB6, 0xBE, 0xE0,         // 4 5 6 7
-                        0xFE, 0xF6, 0x02                // 8 9 - 
+const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         /* 0 1 2 3 */
+                        0x66, 0xB6, 0xBE, 0xE0,         /* 4 5 6 7 */
+                        0xFE, 0xF6, 0x02                /* 8 9 -   */
 };
 
 /* Define key names of buttons */
@@ -154,33 +165,60 @@ int main() {
         int count = 0;
         int prev = -1;
 
+        /* time slept */
+        int slept = 0;
+        /* delay keyscanning by 'sleepfor' */
+        int sleepfor = MAX_SLEEP;
+
+        /* keep track if recently a button was pressed */
+        int ks_active = 0;
+        int ks_time = 0;
+
+
         /* Main loop - read all FIFOs and act as needed */
         while(1) {
 
-                /* check if any key was pressed */
+                /* here we read in the keys and perform some timing magic */
 
-                /* read key data */
-                char read[]  =  { 0x42, 0xFF, 0xFF, 0xFF };         
-                bcm2835_spi_transfern(read, sizeof(read));
+                /* reset ks_active after KEY_SCAN_LOW time has passed */
+                if(ks_time == (KEY_SCAN_LOW)) { ks_time = 0; ks_active = 0; sleepfor = MAX_SLEEP; }
+                /* increase ks_time with DELAY_TIME */
+                if(ks_active) { ks_time += DELAY_TIME; } 
 
-                for(row=0;row<15;row++) {
-                        if(read[1] == keycodes[row][0] && read[2] == keycodes[row][1]  && read[3] == keycodes[row][2]) {
+                //printf("slept %d sleptfor %d kstime %d ksactive %d\n", slept,sleepfor,ks_time, ks_active);
 
-                                /* keep track of how many times same button is pressed */
-                                if(prev == row) { count++; } else { prev = row; count=0; }
-                                
-                                /* send fake lirc simulate command */
-                                /* FIXME: we use system() - maybe better to write to LIRCd socket? */
-                                /* FIXME: first code in irsend command  is deprecated, but maybe we need it? */
-                                /* FIXME: how to get IR remote name from lirc_client?! */
-                                sprintf(command, "irsend simulate \"0000000000000000 %02x %s DEFAULT\"", count, keynames[row]);
-                                system(command);
+                if(slept == sleepfor) {
+                        /* read in key data */
+                        char read[]  =  { 0x42, 0xFF, 0xFF, 0xFF };         
+                        bcm2835_spi_transfern(read, 4);
 
-                                /* sleep a bit before reading in next key sequence */
-                                /* this will also delay led/display update for 0.2s, but user is pressing buttons */
-                                usleep(200000);
-                                break;
-                        }
+                        /* a button was pressed, we set 'sleepfor' to MIN_SLEEP to increase response times on the buttons */
+                        if(read[1] != 0x00 || read[2]  != 0x00 || read[3] != 0x00) { 
+                                ks_active = 1;
+                                sleepfor = MIN_SLEEP; 
+
+                                for(row=0;row<15;row++) {
+                                        if(read[1] == keycodes[row][0] && read[2] == keycodes[row][1]  && read[3] == keycodes[row][2]) {
+
+                                                /* keep track of how many times same button is pressed */
+                                                if(prev == row) { count++; } else { prev = row; count=0; }
+                                                
+                                                /* send fake lirc simulate command */
+                                                /* FIXME: we use system() - maybe better to write to LIRCd socket? */
+                                                /* FIXME: first code in irsend command  is deprecated, but maybe we need it? */
+                                                /* FIXME: how to get IR remote name from lirc_client?! */
+
+                                                sprintf(command, "irsend simulate \"0000000000000000 %02x %s DEFAULT\"", count, keynames[row]);
+                                                system(command);
+
+                                                /* sleep a bit before reading in next key sequence */
+                                                /* this will also delay led/display update for 0.2s, but user is pressing buttons */
+                                                usleep(200000);
+                                                break;
+                                        }
+                                }
+                        } 
+                        slept = 0;
                 }
 
                 /* Process LED1 FIFO */
@@ -287,8 +325,9 @@ int main() {
                         spi_update();
                 }
                 
-                /* Sleep 0.1s */
-                usleep(100000);
+                /* Sleep DELAY_TIME */
+                usleep(DELAY_TIME);
+                slept+=DELAY_TIME; 
         }
         return 0;
 }

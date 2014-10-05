@@ -1,7 +1,6 @@
 /* lirc_led.c                                                                 */
 /*                                                                            */
 /* Dummy LIRC client to flash LED on IR signal                                */ 
-/* Needs additional work on timings                                           */
 /*                                                                            */
 /* Author : Geert Lorang <geert |AT| lorang.be> - 2014-09-29                  */
 /*                                                                            */
@@ -142,16 +141,13 @@ int main(int argc, char * argv[]) {
                                 end_len=strlen(end);
                                 memmove(buffer,end,end_len+1);
 
-                                /* Only blink on first occurence */
-                                if(rep == 0) {
-                                        fprintf(fp_led, "%d\n", 1);
-                                        fflush(fp_led);
+                                fprintf(fp_led, "%d\n", 1);
+                                fflush(fp_led);
                                 
-                                        usleep(100000);
+                                usleep(100000);
                                 
-                                        fprintf(fp_led, "%d\n", 0);
-                                        fflush(fp_led);
-                                } 
+                                fprintf(fp_led, "%d\n", 0);
+                                fflush(fp_led);
                          }
                 }
                 while(len!=0);

@@ -6,9 +6,6 @@
 /*                                                                            */
 /* Author : Geert Lorang <geert |AT| lorang.be> - 2014-09-28                  */
 /*                                                                            */
-/* TODO: Proper stop/start / daemonize                                        */
-/*                                                                            */
-/* Compile with: gcc ad1000.c -o ad1000 -l bcm2835                            */
 /* Stop with: kill $(pidof ad1000)                                            */
 /*                                                                            */
 /* Note that bcm2835/SPI0 does not support changing byte order (LSB/MSB)      */
@@ -23,6 +20,9 @@
 #include <string.h>
 #include <time.h>
 #include <signal.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <syslog.h>
 #include <bcm2835.h>
 
 /* constant definitions */
@@ -45,10 +45,13 @@
 #define MAX_SLEEP 1000000       /* 1 second */
 #define KEY_SCAN_LOW 10000000    /* 10 seconds */
 
+/* exit on signal */
+volatile sig_atomic_t stop;
+
 /* Brightness levels (low to high) */
 const char brightness_levels[] = { 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF1 };
 
-/* Define all digits an hex symbols */
+/* Define all digits as hex symbols */
 const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         /* 0 1 2 3 */
                         0x66, 0xB6, 0xBE, 0xE0,         /* 4 5 6 7 */
                         0xFE, 0xF6, 0x02                /* 8 9 -   */
@@ -119,33 +122,8 @@ void setDisplayOff();
 
 int main() {
 
-        /* Create pseudo device files to control our frontpanel */
-        if(create_devs() != 0) {
-                return -1;
-        } 
-
-        /* Cleanup on exit */
-        signal(SIGINT, cleanup);
-        signal(SIGABRT, cleanup);
-        signal(SIGTERM, cleanup);
-
-        if(spi_init() != 0) {
-                printf("Could not initialize SPI driver!\n");
-                return -1;
-        }
-
         /* File pointers for each FIFO */
         FILE *fp_led1, *fp_led2, *fp_led3, *fp_disp, *fp_dispbr;
-        fp_led1 = fdopen(open(DEV_LED1, O_RDONLY | O_NONBLOCK), "r");
-        fp_led2 = fdopen(open(DEV_LED2, O_RDONLY | O_NONBLOCK), "r");
-        fp_led3 = fdopen(open(DEV_LED3, O_RDONLY | O_NONBLOCK), "r");
-        fp_disp = fdopen(open(DEV_DISP, O_RDONLY | O_NONBLOCK), "r");
-        fp_dispbr = fdopen(open(DEV_DISP_BRIGHTNESS, O_RDONLY | O_NONBLOCK), "r");
-
-        if(fp_led1 < 0 || fp_led2 < 0 || fp_led3 < 0 || fp_disp < 0 || fp_dispbr < 0) {
-                /* Could not open all FIFOs */
-                return -1;
-        }
 
         /* buffers to store input */
         char buffer[8] = { 0x00 } ;
@@ -174,9 +152,76 @@ int main() {
         int ks_active = 0;
         int ks_time = 0;
 
+        /* pid & sid */
+        pid_t pid, sid;
+        
+        /* Fork off the parent process */
+        pid = fork();
+        if (pid < 0) {
+                fprintf(stderr, "Could not fork to background\n");
+                exit(EXIT_FAILURE);
+        }
+
+        /* If we got a good PID, then we can exit the parent process. */
+        if (pid > 0) {
+                exit(EXIT_SUCCESS);
+        }
+
+        /* Change the file mode mask */
+        umask(0);
+
+        /* Open syslog */
+        openlog("ad1000", LOG_PID|LOG_CONS, LOG_USER);
+        syslog(LOG_INFO, "daemon starting up");
+
+        /* Create a new SID for the child process */
+        sid = setsid();
+        if (sid < 0) {
+                fprintf(stderr, "setsid() failed\n");
+                exit(EXIT_FAILURE);
+        }
+
+        /* Change the current working directory */
+        if ((chdir("/")) < 0) {
+                fprintf(stderr, "chrdir() failed\n");
+                exit(EXIT_FAILURE);
+        }
+
+        /* Close out the standard file descriptors */
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
+
+
+        /* Create pseudo device files to control our frontpanel */
+        if(create_devs() != 0) {
+                return -1;
+        } 
+
+        /* Cleanup on exit */
+        signal(SIGABRT, cleanup);
+        signal(SIGTERM, cleanup);
+
+        if(spi_init() != 0) {
+                printf("Could not initialize SPI driver!\n");
+                return -1;
+        }
+
+        /* open file pointers */
+        fp_led1 = fdopen(open(DEV_LED1, O_RDONLY | O_NONBLOCK), "r");
+        fp_led2 = fdopen(open(DEV_LED2, O_RDONLY | O_NONBLOCK), "r");
+        fp_led3 = fdopen(open(DEV_LED3, O_RDONLY | O_NONBLOCK), "r");
+        fp_disp = fdopen(open(DEV_DISP, O_RDONLY | O_NONBLOCK), "r");
+        fp_dispbr = fdopen(open(DEV_DISP_BRIGHTNESS, O_RDONLY | O_NONBLOCK), "r");
+
+        if(fp_led1 < 0 || fp_led2 < 0 || fp_led3 < 0 || fp_disp < 0 || fp_dispbr < 0) {
+                /* Could not open all FIFOs */
+                return -1;
+        }
+
 
         /* Main loop - read all FIFOs and act as needed */
-        while(1) {
+        while(stop == 0) {
 
                 /* here we read in the keys and perform some timing magic */
 
@@ -329,7 +374,20 @@ int main() {
                 usleep(DELAY_TIME);
                 slept+=DELAY_TIME; 
         }
-        return 0;
+
+        syslog(LOG_INFO, "caught exit signal - shutting down");
+
+        /* close all file pointers */
+        fclose(fp_led1);
+        fclose(fp_led2);
+        fclose(fp_led3);
+        fclose(fp_disp);
+        fclose(fp_dispbr);
+
+        /* Close syslog */
+        closelog();
+
+        exit(EXIT_SUCCESS);
 }
 
 
@@ -355,11 +413,10 @@ int remove_devs() {
 }
 
 void cleanup() {
-        printf("Caught exit signal - cleaning up!\n");
+        stop = 1;
         setDisplayOff();
         spi_end();
         remove_devs();
-        exit(0);
 }
 
 int spi_init() {

@@ -1,4 +1,4 @@
-/* lirc.c                                                                     */
+/* lirc_led.c                                                                 */
 /*                                                                            */
 /* Dummy LIRC client to flash LED on IR signal                                */ 
 /* Needs additional work on timings                                           */

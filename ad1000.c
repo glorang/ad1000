@@ -219,10 +219,8 @@ int main() {
                 return -1;
         }
 
-
         /* Main loop - read all FIFOs and act as needed */
         while(stop == 0) {
-
                 /* here we read in the keys and perform some timing magic */
 
                 /* reset ks_active after KEY_SCAN_LOW time has passed */
@@ -449,7 +447,13 @@ int spi_init() {
 }
 
 void spi_update() {
-        bcm2835_spi_transfern(display, 11);
+        /* bcm2835_spi_transfer will overwrite the array with the data */
+        /* it read back, in case MISO is not connected or depending */
+        /* on where they are tied together this can empty display[] */
+        /* send copy instead */
+        char disp_copy[11] = { 0x00 };
+        memcpy(disp_copy, display, 11);
+        bcm2835_spi_transfern(disp_copy, 11);
 }
 
 void spi_end() {

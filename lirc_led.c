@@ -140,13 +140,13 @@ int main(int argc, char * argv[]) {
                                 end=strchr(buffer,'\n')+1;
                                 end_len=strlen(end);
                                 memmove(buffer,end,end_len+1);
-
-                                fprintf(fp_led, "%d\n", 1);
-                                fflush(fp_led);
                                 
-                                usleep(100000);
-                                
-                                fprintf(fp_led, "%d\n", 0);
+                                /* FIXME: KEY_UP will not flash */
+                                if(strstr(button, "_UP")) {
+                                        fprintf(fp_led, "%d\n", 0);
+                                } else {
+                                        fprintf(fp_led, "%d\n", 1);
+                                }
                                 fflush(fp_led);
                          }
                 }

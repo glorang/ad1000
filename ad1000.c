@@ -260,6 +260,7 @@ int main() {
                         } else if(prev >= 0) {
                                 int release_len = strlen(keynames[prev]) + 4;
                                 char release[release_len]; 
+                                release[release_len] = '\0'; 
                                 strcpy(release, keynames[prev]);
                                 strcat(release, "_UP");
                                 sprintf(command, "irsend simulate \"0000000000000000 00 %s DEFAULT\"", release);

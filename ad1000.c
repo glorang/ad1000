@@ -253,14 +253,19 @@ int main() {
 
                                                 sprintf(command, "irsend simulate \"0000000000000000 %02x %s DEFAULT\"", count, keynames[row]);
                                                 system(command);
-
-                                                /* sleep a bit before reading in next key sequence */
-                                                /* this will also delay led/display update for 0.2s, but user is pressing buttons */
-                                                usleep(200000);
                                                 break;
                                         }
                                 }
-                        } 
+                        /* no key pressed and prev set, send lirc key release event */
+                        } else if(prev >= 0) {
+                                int release_len = strlen(keynames[prev]) + 4;
+                                char release[release_len]; 
+                                strcpy(release, keynames[prev]);
+                                strcat(release, "_UP");
+                                sprintf(command, "irsend simulate \"0000000000000000 00 %s DEFAULT\"", release);
+                                system(command);
+                                prev = -1;
+                        }
                         slept = 0;
                 }
 

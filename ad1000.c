@@ -139,8 +139,10 @@ int main() {
         /* int to lookup key index of pressed button */
         int row;
 
-        /* variables for irsend */
+        /* variables for lirc */
+        int lirc_sock;
         char command[100];
+        char lirc_read[256];
         int count = 0;
         int prev = -1;
         int len;
@@ -157,9 +159,6 @@ int main() {
         /* pid & sid */
         pid_t pid, sid;
 
-        /* file descriptor of lirc socket */
-        int lirc_sock;
-        
         /* Fork off the parent process */
         pid = fork();
         if (pid < 0) {
@@ -228,7 +227,7 @@ int main() {
         }
 
         /* Initiate LIRC */
-        if( (lirc_sock = lirc_init("lirc",1)) == -1) {
+        if( (lirc_sock = lirc_init("ad1000",1)) == -1) {
                 syslog(LOG_ERR, "lirc_init() failed");
                 exit(EXIT_FAILURE);
         }
@@ -246,16 +245,16 @@ int main() {
 
                 if(slept == sleepfor) {
                         /* read in key data */
-                        char read[]  =  { 0x42, 0xFF, 0xFF, 0xFF };         
-                        bcm2835_spi_transfern(read, 4);
+                        char read_kd[]  =  { 0x42, 0xFF, 0xFF, 0xFF };         
+                        bcm2835_spi_transfern(read_kd, 4);
 
                         /* a button was pressed, we set 'sleepfor' to MIN_SLEEP to increase response times on the buttons */
-                        if(read[1] != 0x00 || read[2]  != 0x00 || read[3] != 0x00) { 
+                        if(read_kd[1] != 0x00 || read_kd[2]  != 0x00 || read_kd[3] != 0x00) { 
                                 ks_active = 1;
                                 sleepfor = MIN_SLEEP; 
 
                                 for(row=0;row<15;row++) {
-                                        if(read[1] == keycodes[row][0] && read[2] == keycodes[row][1]  && read[3] == keycodes[row][2]) {
+                                        if(read_kd[1] == keycodes[row][0] && read_kd[2] == keycodes[row][1]  && read_kd[3] == keycodes[row][2]) {
 
                                                 /* keep track of how many times same button is pressed */
                                                 if(prev == row) { count++; } else { prev = row; count=0; }
@@ -264,6 +263,9 @@ int main() {
                                                 len = sprintf(command, "simulate 0000000000000000 %02x %s AD-1000\n", count, keynames[row]);
                                                 //printf("Send lirc command (size = %d) : %s", len, command);
                                                 write(lirc_sock, command, len);
+                                                /* read socket so it doesn't get full, but we don't really care about this */
+                                                read(lirc_sock, lirc_read, 256);
+
                                                 break;
                                         }
                                 }
@@ -278,6 +280,8 @@ int main() {
                                 len = sprintf(command, "simulate 0000000000000000 00 %s AD-1000\n", release);
                                 //printf("Send lirc command (size = %d) : %s", len, command);
                                 write(lirc_sock, command, len);
+                                /* read socket so it doesn't get full, but we don't really care about this */
+                                read(lirc_sock, lirc_read, 256);
                                 prev = -1;
                         }
                         slept = 0;

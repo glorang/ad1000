@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <syslog.h>
 #include <bcm2835.h>
+#include <lirc/lirc_client.h>
 
 /* constant definitions */
 /* device files */
@@ -142,6 +143,7 @@ int main() {
         char command[100];
         int count = 0;
         int prev = -1;
+        int len;
 
         /* time slept */
         int slept = 0;
@@ -154,6 +156,9 @@ int main() {
 
         /* pid & sid */
         pid_t pid, sid;
+
+        /* file descriptor of lirc socket */
+        int lirc_sock;
         
         /* Fork off the parent process */
         pid = fork();
@@ -202,6 +207,9 @@ int main() {
         signal(SIGABRT, cleanup);
         signal(SIGTERM, cleanup);
 
+        /* Make sure we don't crash if sockets are (temporarily) unavailable */
+        signal(SIGPIPE, SIG_IGN);
+
         if(spi_init() != 0) {
                 printf("Could not initialize SPI driver!\n");
                 return -1;
@@ -217,6 +225,12 @@ int main() {
         if(fp_led1 < 0 || fp_led2 < 0 || fp_led3 < 0 || fp_disp < 0 || fp_dispbr < 0) {
                 /* Could not open all FIFOs */
                 return -1;
+        }
+
+        /* Initiate LIRC */
+        if( (lirc_sock = lirc_init("lirc",1)) == -1) {
+                syslog(LOG_ERR, "lirc_init() failed");
+                exit(EXIT_FAILURE);
         }
 
         /* Main loop - read all FIFOs and act as needed */
@@ -246,13 +260,10 @@ int main() {
                                                 /* keep track of how many times same button is pressed */
                                                 if(prev == row) { count++; } else { prev = row; count=0; }
                                                 
-                                                /* send fake lirc simulate command */
-                                                /* FIXME: we use system() - maybe better to write to LIRCd socket? */
-                                                /* FIXME: first code in irsend command  is deprecated, but maybe we need it? */
-                                                /* FIXME: how to get IR remote name from lirc_client?! */
-
-                                                sprintf(command, "irsend simulate \"0000000000000000 %02x %s DEFAULT\"", count, keynames[row]);
-                                                system(command);
+                                                /* send lirc simulate command */
+                                                len = sprintf(command, "simulate 0000000000000000 %02x %s AD-1000\n", count, keynames[row]);
+                                                //printf("Send lirc command (size = %d) : %s", len, command);
+                                                write(lirc_sock, command, len);
                                                 break;
                                         }
                                 }
@@ -263,8 +274,10 @@ int main() {
                                 release[release_len] = '\0'; 
                                 strcpy(release, keynames[prev]);
                                 strcat(release, "_UP");
-                                sprintf(command, "irsend simulate \"0000000000000000 00 %s DEFAULT\"", release);
-                                system(command);
+                                /* send lirc simulate command */
+                                len = sprintf(command, "simulate 0000000000000000 00 %s AD-1000\n", release);
+                                //printf("Send lirc command (size = %d) : %s", len, command);
+                                write(lirc_sock, command, len);
                                 prev = -1;
                         }
                         slept = 0;

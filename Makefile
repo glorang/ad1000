@@ -9,7 +9,7 @@ BINDIR=/usr/local/bin
 all: lirc_led ad1000
 
 ad1000: 
-	$(CC) $(CFLAGS) -o ad1000 ad1000.c -lbcm2835
+	$(CC) $(CFLAGS) -o ad1000 ad1000.c -lbcm2835 -llirc_client
 
 lirc_led: 
 	$(CC) $(CFLAGS) -o lirc_led lirc_led.c -llirc_client

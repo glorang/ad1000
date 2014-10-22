@@ -53,6 +53,10 @@ int main(int argc, char * argv[]) {
         pid_t pid, sid;
         /* error message */
         char errormsg[100];
+
+        /* vars for release (_UP) key */
+        char *p;
+        int pos;
         
         /* Fork off the parent process */
         pid = fork();
@@ -140,9 +144,18 @@ int main(int argc, char * argv[]) {
                                 end=strchr(buffer,'\n')+1;
                                 end_len=strlen(end);
                                 memmove(buffer,end,end_len+1);
-                                
-                                /* FIXME: KEY_UP will not flash */
-                                if(strstr(button, "_UP")) {
+
+                                /* look for last position of _UP in the pressed key */
+                                /* if it's after position 5 we should turn off the led, otherwise turn it on */
+                                /* This is required for KEY_UP (on) vs KEY_UP_UP (off) to work properly */
+                                pos = -1;
+                                p = button;        
+                                while( (p = strstr(p, "_UP")) != NULL ) {
+                                        pos = p - button;
+                                        p+=3;
+                                }
+        
+                                if(pos > 5) {
                                         fprintf(fp_led, "%d\n", 0);
                                 } else {
                                         fprintf(fp_led, "%d\n", 1);

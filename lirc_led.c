@@ -7,15 +7,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <syslog.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/prctl.h>
 #include <lirc/lirc_client.h>
 
 #define DEV_LED "/dev/ad1000/led2"
@@ -26,7 +24,6 @@ void init_exit(int signum);
 
 /* exit on signal */
 volatile sig_atomic_t stop;
-
 
 int main(int argc, char * argv[]) {
 
@@ -49,8 +46,6 @@ int main(int argc, char * argv[]) {
         /* file pointer for LED */
         FILE *fp_led; 
         
-        /* pid & sid */
-        pid_t pid, sid;
         /* error message */
         char errormsg[100];
 
@@ -58,43 +53,10 @@ int main(int argc, char * argv[]) {
         char *p;
         int pos;
         
-        /* Fork off the parent process */
-        pid = fork();
-        if (pid < 0) {
-                fprintf(stderr, "Could not fork to background\n");
-                exit(EXIT_FAILURE);
-        }
-        
-        /* If we got a good PID, then we can exit the parent process. */
-        if (pid > 0) {
-                exit(EXIT_SUCCESS);
-        }
-        
-        /* Change the file mode mask */
-        umask(0);
-        
         /* Open syslog */
         openlog("lirc_led", LOG_PID|LOG_CONS, LOG_USER);
         syslog(LOG_INFO, "daemon starting up");
         
-        /* Create a new SID for the child process */
-        sid = setsid();
-        if (sid < 0) {
-                fprintf(stderr, "setsid() failed\n");
-                exit(EXIT_FAILURE);
-        }
-        
-        /* Change the current working directory */
-        if ((chdir("/")) < 0) {
-                fprintf(stderr, "chrdir() failed\n");
-                exit(EXIT_FAILURE);
-        }
-
-        /* Close out the standard file descriptors */
-        close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
-
         /* Open LED device file, but only if it exists */
         if(access(DEV_LED, F_OK) != -1) {
                 fp_led = fopen(DEV_LED, "w");
@@ -125,6 +87,7 @@ int main(int argc, char * argv[]) {
         /* catch shutdown signals */
         signal(SIGABRT, init_exit);
         signal(SIGTERM, init_exit);
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
         
         /* Each time we receive an IR code, blink LED */
         while(stop == 0) {

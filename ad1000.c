@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <syslog.h>
+#include <ctype.h>
 #include <bcm2835.h>
 
 /* constant definitions */
@@ -54,7 +55,14 @@ const char brightness_levels[] = { 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF
 /* Define all digits as hex symbols */
 const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         /* 0 1 2 3 */
                         0x66, 0xB6, 0xBE, 0xE0,         /* 4 5 6 7 */
-                        0xFE, 0xF6, 0x02                /* 8 9 -   */
+                        0xFE, 0xF6, 0x02, 0xEE,         /* 8 9 - A */
+                        0x3E, 0x9C, 0x7A, 0x9E,         /* B C D E */ 
+                        0x8E, 0xF6, 0x6E, 0x0C,         /* F G H I */
+                        0x78, 0x6E, 0x1C, 0xA8,         /* J K L M */
+                        0x2A, 0xFC, 0xCE, 0xE6,         /* N O P Q */
+                        0x0A, 0xB6, 0x1E, 0x7C,         /* R S T U */
+                        0x38, 0x54, 0x6E, 0x76,         /* V W X Y */
+                        0xDA                            /* Z       */
 };
 
 /* Define key names of buttons */
@@ -354,8 +362,14 @@ int main() {
                                         num = result[i] - 0x30;
                                         dig[current_digit] += digits[num];
                                         current_digit--;
+                                } else if( (result[i] >= 0x41 && result[i] <= 0x5A) || (result[i] >= 0x61 && result[i] <= 0x7A) ) {
+                                        num = toupper(result[i]) - 0x36; 
+                                        dig[current_digit] += digits[num];
+                                        current_digit--;
                                 } else if(result[i] == '-') {
                                         dig[current_digit] += digits[10];
+                                        current_digit--;
+                                } else if(result[i] == ' ') {
                                         current_digit--;
                                 /* to enable the dot you need to flip the last bit (0000 0001) of it's value in digits[] */
                                 } else if(result[i] == '.') {

@@ -30,9 +30,9 @@ volatile sig_atomic_t stop;
 int main(int argc, char *argv[]) {
 
         /* socket vars */
-        int sock;
+        int sock, i;
         struct sockaddr_in server;
-        char server_reply[2000];
+        char server_reply[2000] = { 0x00 };
 
         /* total tracks */ 
         int playlist_item_count = 0;
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
         /* Main loop - Wait for data to arrive */    
         while(stop == 0) { 
                 if(recv(sock , server_reply , 2000 , 0) < 0) {
-                        syslog(LOG_ERR, "could not retreive data from socket");                
+                        syslog(LOG_ERR, "could not retrieve data from socket");                
                         break;
                 } 
 
@@ -129,6 +129,9 @@ int main(int argc, char *argv[]) {
                         update_display("STOP");
                         update_display("");
                 }
+
+                /* zero server_reply again */
+                for(i=0;i<sizeof(server_reply);i++) { server_reply[i] = 0x00; }
         }
      
         syslog(LOG_INFO, "caught exit signal - shutting down");

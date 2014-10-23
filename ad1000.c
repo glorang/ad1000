@@ -128,7 +128,7 @@ void spi_end();
 void setDisplayOn(int brightness);
 void setDisplayOff();
 
-int main() {
+int main(int argc, char *argv[]) {
 
         /* File pointers for each FIFO */
         FILE *fp_led1, *fp_led2, *fp_led3, *fp_disp, *fp_dispbr;
@@ -161,7 +161,8 @@ int main() {
         int ks_time = 0;
 
         /* pid & sid */
-        pid_t pid, sid;
+        pid_t pid, sid, pid_lirc_led, pid_display;
+        char *cmd;
 
         /* Fork off the parent process */
         pid = fork();
@@ -200,7 +201,6 @@ int main() {
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
 
-
         /* Create pseudo device files to control our frontpanel */
         if(create_devs() != 0) {
                 return -1;
@@ -211,7 +211,7 @@ int main() {
         signal(SIGTERM, cleanup);
 
         if(spi_init() != 0) {
-                printf("Could not initialize SPI driver!\n");
+                syslog(LOG_ERR, "Could not initialize SPI driver!\n");
                 return -1;
         }
 
@@ -227,6 +227,37 @@ int main() {
                 return -1;
         }
 
+        /* fork off lirc_led and display */
+        if(pid == 0) {  
+                pid_lirc_led = fork();
+                if (pid_lirc_led < 0) {
+                        syslog(LOG_ERR, "Could not fork lirc_led to background\n");
+                        exit(EXIT_FAILURE);
+                } 
+
+                if (pid_lirc_led == 0) {
+                        cmd = "/usr/local/bin/lirc_led";
+                        char *cmd_args[] = { cmd, NULL };
+                        execvp(cmd, cmd_args);
+                        _exit(1);
+                }
+        }
+
+        if(pid == 0) {
+                pid_display = fork();
+                if (pid_display < 0) {
+                        syslog(LOG_ERR, "Could not fork ad_display to background\n");
+                        exit(EXIT_FAILURE);
+                } 
+                
+                if (pid_display == 0) {
+                        cmd = "/usr/local/bin/ad_display";
+                        char *cmd_args[] = { cmd, NULL };
+                        execvp(cmd, cmd_args);
+                        _exit(1);
+                }
+        }
+        
         /* Main loop - read all FIFOs and act as needed */
         while(stop == 0) {
                 /* here we read in the keys and perform some timing magic */
@@ -408,22 +439,22 @@ int main() {
 
 int create_devs() {
         umask(0);
-        if(mkdir(DEV_DIR, 0755) != 0) { printf("Could not create %s\n", DEV_DIR); return -1; }
-        if(mknod(DEV_LED1, S_IFIFO|0622, 0) != 0) { printf("Could not create %s\n", DEV_LED1); return -1; }
-        if(mknod(DEV_LED2, S_IFIFO|0622, 0) != 0) { printf("Could not create %s\n", DEV_LED2); return -1; }
-        if(mknod(DEV_LED3, S_IFIFO|0622, 0) != 0) { printf("Could not create %s\n", DEV_LED3); return -1; }
-        if(mknod(DEV_DISP, S_IFIFO|0622, 0) != 0) { printf("Could not create %s\n", DEV_DISP); return -1; }
-        if(mknod(DEV_DISP_BRIGHTNESS, S_IFIFO|0622, 0) != 0) { printf("Could not create %s\n", DEV_DISP_BRIGHTNESS); return -1; }
+        if(mkdir(DEV_DIR, 0755) != 0) { syslog(LOG_ERR, "Could not create %s\n", DEV_DIR); return -1; }
+        if(mknod(DEV_LED1, S_IFIFO|0622, 0) != 0) { syslog(LOG_ERR, "Could not create %s\n", DEV_LED1); return -1; }
+        if(mknod(DEV_LED2, S_IFIFO|0622, 0) != 0) { syslog(LOG_ERR, "Could not create %s\n", DEV_LED2); return -1; }
+        if(mknod(DEV_LED3, S_IFIFO|0622, 0) != 0) { syslog(LOG_ERR, "Could not create %s\n", DEV_LED3); return -1; }
+        if(mknod(DEV_DISP, S_IFIFO|0622, 0) != 0) { syslog(LOG_ERR, "Could not create %s\n", DEV_DISP); return -1; }
+        if(mknod(DEV_DISP_BRIGHTNESS, S_IFIFO|0622, 0) != 0) { syslog(LOG_ERR, "Could not create %s\n", DEV_DISP_BRIGHTNESS); return -1; }
         return 0; 
 }
 
 int remove_devs() {
-        if(unlink(DEV_LED1) != 0) { printf("Could not remove %s\n", DEV_LED1); }
-        if(unlink(DEV_LED2) != 0) { printf("Could not remove %s\n", DEV_LED2); }
-        if(unlink(DEV_LED3) != 0) { printf("Could not remove %s\n", DEV_LED3); }
-        if(unlink(DEV_DISP) != 0) { printf("Could not remove %s\n", DEV_DISP); }
-        if(unlink(DEV_DISP_BRIGHTNESS) != 0) { printf("Could not remove %s\n", DEV_DISP_BRIGHTNESS); }
-        if(rmdir(DEV_DIR) != 0) {  printf("Could not remove %s\n", DEV_DIR); }
+        if(unlink(DEV_LED1) != 0) { syslog(LOG_ERR, "Could not remove %s\n", DEV_LED1); }
+        if(unlink(DEV_LED2) != 0) { syslog(LOG_ERR, "Could not remove %s\n", DEV_LED2); }
+        if(unlink(DEV_LED3) != 0) { syslog(LOG_ERR, "Could not remove %s\n", DEV_LED3); }
+        if(unlink(DEV_DISP) != 0) { syslog(LOG_ERR, "Could not remove %s\n", DEV_DISP); }
+        if(unlink(DEV_DISP_BRIGHTNESS) != 0) { syslog(LOG_ERR, "Could not remove %s\n", DEV_DISP_BRIGHTNESS); }
+        if(rmdir(DEV_DIR) != 0) {  syslog(LOG_ERR, "Could not remove %s\n", DEV_DIR); }
         return 0; 
 }
 

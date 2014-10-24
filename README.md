@@ -21,16 +21,16 @@ Usage
 =====
 
 ad1000 is the "master" daemon that will create following devices files:
-	- /dev/ad1000/led{1..3}
-	- /dev/ad1000/disp
-	- /dev/ad1000/disp_brightness
+- /dev/ad1000/led{1..3}
+- /dev/ad1000/disp
+- /dev/ad1000/disp_brightness
 
 You can echo 1 or 0 in any led device file to turn it on or off. 
 
 led1 is a dual color led, so in this device file you can echo :
-	- 1 for green
-	- 2 for red
-	- 3 for both green and red (orange-like)
+- 1 for green
+- 2 for red
+- 3 for both green and red (orange-like)
 
 You can echo all letters, numbers, hyphen and space into the disp device file.
 The dot can be enabled by adding a dot in the input string. e.g. 'echo 12.34 > /dev/ad1000/disp'.

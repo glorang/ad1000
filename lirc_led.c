@@ -15,12 +15,7 @@
 #include <errno.h>
 #include <sys/prctl.h>
 #include <lirc/lirc_client.h>
-
-#define DEV_LED "/dev/ad1000/led2"
-#define PACKET_SIZE 256
-
-/* function definitions */
-void init_exit(int signum);
+#include "ad1000.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
@@ -58,15 +53,15 @@ int main(int argc, char * argv[]) {
         syslog(LOG_INFO, "daemon starting up");
         
         /* Open LED device file, but only if it exists */
-        if(access(DEV_LED, F_OK) != -1) {
-                fp_led = fopen(DEV_LED, "w");
+        if(access(DEV_LED2, F_OK) != -1) {
+                fp_led = fopen(DEV_LED2, "w");
                 if(!fp_led) { 
-                        sprintf(errormsg, "Could not open LED device file %s\n", DEV_LED); 
+                        sprintf(errormsg, "Could not open LED device file %s\n", DEV_LED2); 
                         syslog(LOG_ERR, errormsg);
                         exit(EXIT_FAILURE);
                 }
         } else {
-                sprintf(errormsg, "Could not open LED device file %s\n", DEV_LED); 
+                sprintf(errormsg, "Could not open LED device file %s\n", DEV_LED2); 
                 syslog(LOG_ERR, errormsg);
                 exit(EXIT_FAILURE);
         }

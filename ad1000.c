@@ -25,26 +25,7 @@
 #include <syslog.h>
 #include <ctype.h>
 #include <bcm2835.h>
-
-/* constant definitions */
-/* device files */
-#define DEV_DIR "/dev/ad1000/"
-#define DEV_LED1 DEV_DIR "led1"
-#define DEV_LED2 DEV_DIR "led2"
-#define DEV_LED3 DEV_DIR "led3"
-#define DEV_DISP DEV_DIR "disp"
-#define DEV_DISP_BRIGHTNESS DEV_DIR "disp_brightness"
-
-
-/* key scanning timings */
-/* When we start we read in keydata each MAX_SLEEP (1s) seconds */
-/* As soon as a button is pressed we scan for keydata each MIN_SLEEP (0.17s) seconds */
-/* After KEY_SCAN_LOW (10s) we scan again every MAX_SLEEP (1s) seconds */
-/* This reduces CPU usage drastically, writing every 0.01 on the SPI bus increases CPU usage too much */
-#define DELAY_TIME 10000        /* 0.01 second */
-#define MIN_SLEEP 170000        /* 0.17 second */
-#define MAX_SLEEP 1000000       /* 1 second */
-#define KEY_SCAN_LOW 10000000    /* 10 seconds */
+#include "ad1000.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
@@ -117,16 +98,6 @@ char display[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0
 
 /* default brightness */
 int brightness = 2;
-
-/* function definitions */
-int create_devs(); 
-int remove_devs(); 
-void cleanup(); 
-int spi_init();
-void spi_update();
-void spi_end();
-void setDisplayOn(int brightness);
-void setDisplayOff();
 
 int main(int argc, char *argv[]) {
 
@@ -207,8 +178,8 @@ int main(int argc, char *argv[]) {
         } 
 
         /* Cleanup on exit */
-        signal(SIGABRT, cleanup);
-        signal(SIGTERM, cleanup);
+        signal(SIGABRT, init_exit);
+        signal(SIGTERM, init_exit);
 
         if(spi_init() != 0) {
                 syslog(LOG_ERR, "Could not initialize SPI driver!\n");
@@ -260,7 +231,12 @@ int main(int argc, char *argv[]) {
         
         /* Main loop - read all FIFOs and act as needed */
         while(stop == 0) {
-                /* here we read in the keys and perform some timing magic */
+                /* Here we read in the keys and perform some timing magic */
+                /* When we start we read in keydata each MAX_SLEEP (1s) seconds */
+                /* As soon as a button is pressed we scan for keydata each MIN_SLEEP (0.17s) seconds */
+                /* After KEY_SCAN_LOW (10s) we scan again every MAX_SLEEP (1s) seconds */
+                /* This reduces CPU usage drastically, writing every 0.01 on the SPI bus increases CPU usage too much */
+
 
                 /* reset ks_active after KEY_SCAN_LOW time has passed */
                 if(ks_time == (KEY_SCAN_LOW)) { ks_time = 0; ks_active = 0; sleepfor = MAX_SLEEP; }
@@ -458,7 +434,7 @@ int remove_devs() {
         return 0; 
 }
 
-void cleanup() {
+void init_exit(int signum) {
         stop = 1;
         setDisplayOff();
         spi_end();

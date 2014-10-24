@@ -17,12 +17,7 @@
 #include <signal.h>
 #include <syslog.h>
 #include "cJSON.h"
-
-#define DEV_DISP "/dev/ad1000/disp"
-
-/* function definitions */
-void init_exit(int signum);
-void update_display(char *text);
+#include "ad1000.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;

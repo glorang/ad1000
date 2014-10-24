@@ -11,10 +11,10 @@ Install from here : http://www.airspayce.com/mikem/bcm2835/index.html
 
 After that:
 
-# git clone git://github.com/glorang/ad1000
-# make
-# make install
-# /usr/local/bin/ad1000
+  git clone git://github.com/glorang/ad1000
+  make
+  make install
+  /usr/local/bin/ad1000
 
 
 Usage
@@ -50,19 +50,19 @@ The ad1000 daemon will spawn off 2 childeren by default:
 License
 =======
 
-        DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 
-                    Version 2, December 2004 
-
- Copyright (c) 2014 Geert Lorang
-
- Everyone is permitted to copy and distribute verbatim or modified 
- copies of this license document, and changing it is allowed as long 
- as the name is changed. 
-
-            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 
-   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION 
-
-  0. You just DO WHAT THE FUCK YOU WANT TO.
+           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 
+                      Version 2, December 2004 
+  
+      Copyright (c) 2014 Geert Lorang
+      
+      Everyone is permitted to copy and distribute verbatim or modified 
+      copies of this license document, and changing it is allowed as long 
+      as the name is changed. 
+    
+               DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 
+       TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION 
+     
+       0. You just DO WHAT THE FUCK YOU WANT TO.
 
 
 The display part uses cJSON <http://sourceforge.net/projects/cjson/> which is licensed as follows:

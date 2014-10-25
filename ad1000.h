@@ -42,4 +42,7 @@ extern void setDisplayOn(int brightness);
 extern void setDisplayOff();
 
 /* write XBMC API data on display (ad_display.c) */
-extern void update_display(char *text);
+extern int update_display(char *text);
+
+/* toggle pause */
+extern void toggle_pause();

@@ -6,7 +6,7 @@ CFLAGS=-Wall -g
 INSTALL=/usr/bin/install
 BINDIR=/usr/local/bin
 
-all: lirc_led ad1000 ad_display
+all: lirc_led ad1000 ad_display timer
 
 ad1000: 
 	$(CC) $(CFLAGS) -o ad1000 ad1000.c -lbcm2835 
@@ -17,15 +17,20 @@ lirc_led:
 ad_display: 
 	$(CC) $(CFLAGS) -o ad_display ad_display.c cJSON.c -lm
 
+timer: 
+	$(CC) $(CFLAGS) -o timer timer.c 
+
 clean:
-	rm -f ad1000 lirc_led ad_display
+	rm -f ad1000 lirc_led ad_display timer
 
 install:
 	test ! -f ${BINDIR}/ad1000 && $(INSTALL) ad1000 ${BINDIR}
 	test ! -f ${BINDIR}/lirc_led && $(INSTALL) lirc_led ${BINDIR}
 	test ! -f ${BINDIR}/ad_display && $(INSTALL) ad_display ${BINDIR}
+	test ! -f ${BINDIR}/timer && $(INSTALL) timer ${BINDIR}
 
 uninstall:
 	test -f ${BINDIR}/ad1000 && rm ${BINDIR}/ad1000
 	test -f ${BINDIR}/lirc_led && rm ${BINDIR}/lirc_led
 	test -f ${BINDIR}/ad_display && rm ${BINDIR}/ad_display
+	test -f ${BINDIR}/timer && rm ${BINDIR}/timer

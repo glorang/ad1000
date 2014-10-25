@@ -19,6 +19,12 @@
 volatile sig_atomic_t stop;
 volatile sig_atomic_t paused;
 
+/* clock / position display (timer.c) */
+int update_display_timer(char *text, int s);
+
+/* toggle pause */
+void toggle_pause();
+
 int main(int argc, char *argv[]) {
 
         /* Open syslog */
@@ -56,7 +62,7 @@ int main(int argc, char *argv[]) {
                         char msg[4] = { 0x00 };
                         sprintf(msg, "%02d.%02d", cur_min, cur_sec);
                         if(paused != 1) { 
-                                slept_total += update_display(msg);
+                                slept_total += update_display_timer(msg, 1);
                                 cur_sec++;
                         }
                         if(cur_sec == 60) { cur_sec=0; cur_min++; }
@@ -67,7 +73,7 @@ int main(int argc, char *argv[]) {
                         struct tm tm = *localtime(&t);
                         char msg[4] = { 0x00 };
                         sprintf(msg, "%02d.%02d", tm.tm_hour, tm.tm_min);
-                        slept_total += update_display(msg);
+                        slept_total += update_display_timer(msg, 1);
                         sleep(60 - tm.tm_sec);
                 }
         }
@@ -75,14 +81,14 @@ int main(int argc, char *argv[]) {
         syslog(LOG_INFO, "caught exit signal - shutting down");
 
         /* Clear display */
-        update_display("");
+        update_display_timer("", 0);
 
         /* Close syslog */
         closelog();
         exit(0);
 }
 
-int update_display(char *text) {
+int update_display_timer(char *text, int s) {
 
         /* file pointer for display */
         FILE *fp_disp;
@@ -102,7 +108,7 @@ int update_display(char *text) {
         /* Close file pointer */
         fclose(fp_disp);
 
-        sleep(1);
+        sleep(s);
         return 1;
 }
 

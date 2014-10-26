@@ -13,14 +13,12 @@
 #include <signal.h>
 #include <syslog.h>
 #include <time.h>
+#include <math.h>
 #include "ad1000.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
 volatile sig_atomic_t paused;
-
-/* clock / position display (timer.c) */
-int update_display_timer(char *text, int s);
 
 /* toggle pause */
 void toggle_pause();
@@ -36,36 +34,43 @@ int main(int argc, char *argv[]) {
         signal(SIGTERM, init_exit);
         signal(SIGUSR1, toggle_pause);
 
-        char errormsg[100];
         /* arg parsing */
         if(argc < 3) { 
-                sprintf(errormsg, "paramc = %d, argv1 %s argv2 %s\n", argc, argv[1], argv[2]);
-                syslog(LOG_INFO, errormsg);
                 syslog(LOG_ERR, "not enough parameters provided"); 
                 exit(-1); 
         }
 
-        //char *type = sscanf("%s\n", argv[1]);
-        int cur_sec = strtol(argv[2], NULL, 10);
-        int cur_min = 0;
-        int slept_total = 0;
+        int cur_track = (argv[3] == NULL) ? 1 : strtol(argv[3], NULL, 10);
+        int tot_track = (argv[4] == NULL) ? 1 : strtol(argv[4], NULL, 10);
 
-        if(cur_sec > 60) {
-                cur_min = cur_sec / 60;
-                cur_sec -= (cur_min*60);
-        }
+        /* time tracking vars */
+        int cur_sec = 0;
+        int cur_min = 0;
+        
+        /* only show track and title once */
+        int track_shown = 0; 
+        int title_shown = 0; 
 
         /* Main loop - increase timing counter */
         while(stop == 0) { 
 
-                if(strcmp(argv[1], "TIMER") == 0) { 
+                if(track_shown == 0) { 
                         char msg[4] = { 0x00 };
-                        sprintf(msg, "%02d.%02d", cur_min, cur_sec);
+                        sprintf(msg, "%02d.%02d", cur_track, tot_track);
+                        cur_sec += update_display(msg);
+                        track_shown = 1;
+                }
+
+                if(title_shown == 0) { cur_sec += update_display(argv[2]); title_shown = 1; }
+
+                if(strcmp(argv[1], "TIMER") == 0) { 
                         if(paused != 1) { 
-                                slept_total += update_display_timer(msg, 1);
+                                char msg[4] = { 0x00 };
+                                sprintf(msg, "%02d.%02d", cur_min, cur_sec);
+                                update_display(msg);
                                 cur_sec++;
+                                if(cur_sec == 60) { cur_sec=0; cur_min++; }
                         }
-                        if(cur_sec == 60) { cur_sec=0; cur_min++; }
                 }
 
                 if(strcmp(argv[1], "CLOCK") == 0) { 
@@ -73,7 +78,7 @@ int main(int argc, char *argv[]) {
                         struct tm tm = *localtime(&t);
                         char msg[4] = { 0x00 };
                         sprintf(msg, "%02d.%02d", tm.tm_hour, tm.tm_min);
-                        slept_total += update_display_timer(msg, 1);
+                        update_display(msg);
                         sleep(60 - tm.tm_sec);
                 }
         }
@@ -81,19 +86,27 @@ int main(int argc, char *argv[]) {
         syslog(LOG_INFO, "caught exit signal - shutting down");
 
         /* Clear display */
-        update_display_timer("", 0);
+        update_display("");
 
         /* Close syslog */
         closelog();
         exit(0);
 }
 
-int update_display_timer(char *text, int s) {
+int update_display(char *text) {
 
         /* file pointer for display */
         FILE *fp_disp;
+        /* marquee counters */
+        int i,k;
+        /* dots in text counter */
+        int dots;
+        /* display text */
+        char disp[5]; disp[4] = '\0';
         /* error message */
         char errormsg[100];
+
+        double slept;
 
         /* Open display device */
         fp_disp = fopen(DEV_DISP, "w");
@@ -102,14 +115,45 @@ int update_display_timer(char *text, int s) {
                 syslog(LOG_WARNING, errormsg);
         }
 
-        fprintf(fp_disp, "%s\n", text);
-        fflush(fp_disp);
+        /* calculate dots in text */
+        char *p=text;
+        for (dots=0; p[dots]; p[dots]=='.' ? dots++ : *p++);
+
+        if((strlen(text)-dots) <= 4) {
+                fprintf(fp_disp, "%s\n", text);
+                fflush(fp_disp);
+        } else {
+                /* marquee */
+                /* add 4 spaces at the end to complete the marquee effect */
+                int text_len = strlen(text) + 5;
+                char new_text[text_len]; new_text[text_len] = '\0';
+                strcpy(new_text, text);
+                strcat(new_text, "    ");
+                /* Marquee each 4 charachters and sleep 0.2s */
+                for(i=0;i<strlen(new_text);i++) {
+
+                        /* in case we're stopped or paused was pressed when we're marqueeing the title return immediately */
+                        if(paused == 1) return ceil(slept);
+                        if(stop == 1) return ceil(slept);
+
+                        for(k=0;k<4;k++) {
+                                disp[k] = new_text[i+k];
+                        }
+
+                        fprintf(fp_disp, "%s\n", disp);
+                        fflush(fp_disp);
+                        usleep(200000); slept+=0.20;
+                }
+        }
 
         /* Close file pointer */
         fclose(fp_disp);
 
-        sleep(s);
-        return 1;
+        /* sleep up to next 'whole second' */
+        usleep((ceil(slept) - slept) * 1000000);
+
+        sleep(1);
+        return ceil(slept)+1;
 }
 
 void init_exit(int signum) {

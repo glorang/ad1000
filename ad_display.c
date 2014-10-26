@@ -18,12 +18,12 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <syslog.h>
-#include <math.h>
 #include "cJSON.h"
 #include "ad1000.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
+volatile sig_atomic_t paused;
 
 pid_t prev_pid;
 void kill_prev(int parent);
@@ -39,19 +39,14 @@ int main(int argc, char *argv[]) {
         int playlist_item_count = 0;
         /* current track */
         int current_track;
-        /* currenttrack.totaltracks */ 
-        char disp[8]; 
 
         /* cJSON vars to parse JSON */
         cJSON *c_root, *c_params, *c_data, *c_method, *c_item, *c_track, *c_artist, *c_artist_item, *c_title, *c_type;
         char *method, *type;
+        char ptitle[100] = { 0x00 };
 
         /* pid to fork off timer helper */
         pid_t pid;
-        /* counter to keep track how many seconds passed during display update */
-        int cs = 0;
-        /* boolean to track if we've been paused */
-        int was_paused = 0;
 
         /* Open syslog */
         openlog("ad_display", LOG_PID|LOG_CONS, LOG_USER);
@@ -88,25 +83,16 @@ int main(int argc, char *argv[]) {
                 c_root = cJSON_Parse(server_reply);
                 if(c_root != NULL) c_method = cJSON_GetObjectItem(c_root, "method");
                 if(c_method != NULL) method = c_method->valuestring;
-                //printf("method = %s\n", method); 
 
                 /* Check what event came in and update display as needed */
                 if(strcmp(method, "Playlist.OnClear") == 0) {
                         /* reset vars */
-                        cs = 0;
                         playlist_item_count = 0;
                         /* terminater timer process */
                         kill_prev(getpid());
                 } else if(strcmp(method, "Playlist.OnAdd") == 0) {
                         playlist_item_count++;
                 } else if(strcmp(method, "Player.OnPlay") == 0) {
-                        /* if we were previously paused just continue current timer by sending SIGUSR1 */
-                        if(was_paused == 1) { 
-                                kill(prev_pid, SIGUSR1); 
-                                was_paused = 0;
-                        } else {
-                                kill_prev(getpid());
-                                cs = update_display("PLAY");
 
                         /* parse track, artist and title */
                         if(c_root != NULL) c_params = cJSON_GetObjectItem(c_root,"params");
@@ -117,66 +103,80 @@ int main(int argc, char *argv[]) {
                         if(c_item != NULL) c_title = cJSON_GetObjectItem(c_item,"title");
                         if(c_item != NULL) c_artist = cJSON_GetObjectItem(c_item, "artist");
                         if(c_artist != NULL) c_artist_item = cJSON_GetArrayItem(c_artist, 0);
-                
-                        type = (c_type == NULL) ? "" : c_type->valuestring;
 
-                        /* if we're playing a movie show title at the beginning and show clock while playing */
-                        if(strcmp(type, "movie") == 0) {
-                                if(c_title != NULL) update_display(c_title->valuestring); 
+                        /* kill previous timer process when we're starting up or track changed */
+                        if( (strcmp(c_title->valuestring, ptitle) != 0) || paused == 0){
+                                kill_prev(getpid());
+                                type = (c_type == NULL) ? "" : c_type->valuestring;
 
-                                pid = fork();
-                                if(pid == 0) {
-                                        char *cmd = "/usr/local/bin/timer";
-                                        char *cmd_args[] = { cmd, "CLOCK", "0", NULL};
-                                        execvp(cmd, cmd_args);
-                                        _exit(0);
-                                } else { 
-                                        prev_pid = pid;
-                                }
+                                /* if we're playing a movie show title at the beginning and show clock while playing */
+                                if(strcmp(type, "movie") == 0) {
+                                        pid = fork();
+                                        if(pid == 0) {
+                                                char *cmd = "/usr/local/bin/timer";
+                                                char *cmd_args[] = { cmd, "CLOCK", c_title->valuestring, NULL};
+                                                execvp(cmd, cmd_args);
+                                                _exit(0);
+                                        } else { 
+                                                prev_pid = pid;
+                                        }
 
-                        /* show title, currenttrack.totaltracks and start counter */
-                        } else if(strcmp(type, "song") == 0) {
-                                if(c_artist != NULL && c_title != NULL) {                 
-                                        char *disp_artist = c_artist_item->valuestring;
-                                        char *disp_title = c_title->valuestring; 
-                                        int len = strlen(disp_artist) + strlen(disp_title) + 4;
-                                        char artist_title[len]; artist_title[len] = '\0';
-                                        strcpy(artist_title, disp_artist);
-                                        strcat(artist_title, " - ");
-                                        strcat(artist_title, disp_title);
-                                        cs += update_display(artist_title);
-                                }
+                                /* show title, currenttrack.totaltracks and start counter */
+                                } else if(strcmp(type, "song") == 0) {
 
-                                current_track = (c_track == NULL) ? 1 : c_track->valueint;
-                                sprintf(disp, "%02d.%02d", current_track, playlist_item_count);
-                                cs += update_display(disp);
+                                        char artist_title[1000] = { 0x00 };
 
-                                pid = fork();
-                                if(pid == 0) {
-                                        char *cmd = "/usr/local/bin/timer";
-                                        char start_s[4];
-                                        sprintf(start_s, "%d", cs);
-                                        char *cmd_args[] = { cmd, "TIMER", start_s, NULL};
-                                        execvp(cmd, cmd_args);
-                                        _exit(0);
-                                } else { 
-                                        prev_pid = pid;
-                                }
-                        }
+                                        if(c_artist != NULL) {
+                                                char *disp_artist = c_artist_item->valuestring;
+                                                strcpy(artist_title, disp_artist);
+                                        }
 
+                                        if(c_title != NULL) {
+                                                char *disp_title = c_title->valuestring; 
+                                                strcat(artist_title, " - ");
+                                                strcat(artist_title, disp_title);
+                                                strcpy(ptitle, disp_title);
+                                        }
+
+                                        if(c_track != NULL) {
+                                                current_track = c_track->valueint;
+                                        } else {
+                                                current_track = 1;
+                                        }
+
+                                        pid = fork();
+
+                                        if(pid == -1) {
+                                                syslog(LOG_ERR, "fork failed!");
+                                        }
+
+                                        if(pid == 0) {
+                                                char *cmd = "/usr/local/bin/timer";
+                                                char ct[4], tt[4];
+                                                sprintf(ct, "%d", current_track);
+                                                sprintf(tt, "%d", playlist_item_count);
+                                                char *cmd_args[] = { cmd, "TIMER", artist_title, ct, tt, NULL};
+                                                execvp(cmd, cmd_args);
+                                                _exit(0);
+                                        } else { 
+                                                prev_pid = pid;
+                                        }
+                                }                         
+                        } else {
+                                /* if we were previously paused just continue current timer by sending SIGUSR1 */
+                                kill(prev_pid, SIGUSR1);
+                                paused = 0;
                         }
 
 
                 } else if(strcmp(method, "Player.OnPause") == 0) {
                         kill(prev_pid, SIGUSR1); 
-                        was_paused = 1;
+                        paused = 1;
                         update_display("PAUS");
                 } else if(strcmp(method, "Player.OnStop") == 0) {
                         kill_prev(getpid());
                         update_display("STOP");
                         update_display("");
-                        /* reset vars */
-                        cs = 0;
                 }
 
                 /* zero server_reply again */
@@ -198,16 +198,8 @@ int update_display(char *text) {
 
         /* file pointer for display */
         FILE *fp_disp;
-        /* marquee counters */
-        int i,k;
-        /* dots in text counter */
-        int dots;
-        /* display text */
-        char disp[5]; disp[4] = '\0';
         /* error message */
         char errormsg[100];
-
-        double slept;
 
         /* Open display device */
         fp_disp = fopen(DEV_DISP, "w");
@@ -216,53 +208,24 @@ int update_display(char *text) {
                 syslog(LOG_WARNING, errormsg);
         }
 
-        /* calculate dots in text */
-        char *p=text;
-        for (dots=0; p[dots]; p[dots]=='.' ? dots++ : *p++);
-
-        if((strlen(text)-dots) <= 4) {
-                fprintf(fp_disp, "%s\n", text);
-                fflush(fp_disp);
-        } else { 
-                /* marquee */
-
-                /* add 4 spaces at the end to complete the marquee effect */
-                int text_len = strlen(text) + 5;
-                char new_text[text_len]; new_text[text_len] = '\0';
-                strcpy(new_text, text);
-                strcat(new_text, "    "); 
-
-                /* Marquee each 4 charachters and sleep 0.2s */
-                for(i=0;i<strlen(new_text);i++) {
-                        for(k=0;k<4;k++) {
-                                disp[k] = new_text[i+k];
-                        }
-
-                        fprintf(fp_disp, "%s\n", disp);
-                        fflush(fp_disp);
-                        usleep(200000); slept+=0.20;
-                }
-        }
+        fprintf(fp_disp, "%s\n", text);
+        fflush(fp_disp);
 
         /* Close file pointer */
         fclose(fp_disp);
 
-        /* sleep up to next 'whole second' */
-        usleep((ceil(slept) - slept) * 1000000);
-        
         sleep(1);
-        return ceil(slept)+1;
+        return 1;
 }
 
 void init_exit(int signum) {
-        syslog(LOG_INFO, "sinal reveiced");
         stop = 1;
 }
 
 void kill_prev(int parent)  {
         /* don't kill our parent process */
         if(prev_pid != parent && prev_pid != 0) { 
-                kill(prev_pid, SIGTERM); 
+                kill(prev_pid, SIGKILL); 
                 waitpid(prev_pid, NULL, 0);
         }
 }

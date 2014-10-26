@@ -104,10 +104,14 @@ int main(int argc, char *argv[]) {
                         if(c_item != NULL) c_artist = cJSON_GetObjectItem(c_item, "artist");
                         if(c_artist != NULL) c_artist_item = cJSON_GetArrayItem(c_artist, 0);
 
+                        type = (c_type == NULL) ? "" : c_type->valuestring;
+
+                        /* don't do anything when type is unkown (happens when you press play on a folder instead of item */
+                        if(strcmp(type, "unknown") == 0) continue;
+
                         /* kill previous timer process when we're starting up or track changed */
                         if( (strcmp(c_title->valuestring, ptitle) != 0) || paused == 0){
                                 kill_prev(getpid());
-                                type = (c_type == NULL) ? "" : c_type->valuestring;
 
                                 /* if we're playing a movie show title at the beginning and show clock while playing */
                                 if(strcmp(type, "movie") == 0) {

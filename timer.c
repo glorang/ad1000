@@ -34,6 +34,7 @@ int main(int argc, char *argv[]) {
                 syslog(LOG_ERR, "not enough parameters provided"); 
                 exit(-1); 
         }
+        char *method = (argv[1] == NULL) ? "" : argv[1];
         int cur_track = (argv[3] == NULL) ? 1 : strtol(argv[3], NULL, 10);
         int tot_track = (argv[4] == NULL) ? 1 : strtol(argv[4], NULL, 10);
         
@@ -86,7 +87,7 @@ int main(int argc, char *argv[]) {
                 if(title_shown == 0) { title_shown = 1; update_display(argv[2], 1000); }
 
                 /* If we're a timer, request time @ API and update display */ 
-                if(strcmp(argv[1], "TIMER") == 0) { 
+                if(strcmp(method, "TIMER") == 0) { 
                         if(paused != 1) { 
 
                                 /* Enter endless loop by requesting each second current position */
@@ -133,7 +134,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 /* If we're a clock count from 1000 to 0 and explode, just kidding, show a clock */
-                if(strcmp(argv[1], "CLOCK") == 0) { 
+                if(strcmp(method, "CLOCK") == 0) { 
                         time_t t = time(NULL);
                         struct tm tm = *localtime(&t);
                         char msg[4] = { 0x00 };

@@ -18,7 +18,7 @@ ad_display:
 	$(CC) $(CFLAGS) -o ad_display ad_display.c cJSON.c -lm
 
 timer: 
-	$(CC) $(CFLAGS) -o timer timer.c -lm
+	$(CC) $(CFLAGS) -o timer timer.c cJSON.c -lm
 
 clean:
 	rm -f ad1000 lirc_led ad_display timer

@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
         connect(sock , (struct sockaddr *)&server , sizeof(server));
 
         /* Empty display in case there is still something on it for whatever reason */
-        update_display("");
+        update_display("", 0);
 
         /* Main loop - Wait for data to arrive */    
         while(stop == 0) { 
@@ -172,16 +172,17 @@ int main(int argc, char *argv[]) {
                                 paused = 0;
                         }
 
-
                 } else if(strcmp(method, "Player.OnPause") == 0) {
                         kill(prev_pid, SIGUSR1); 
+                        update_display("PAUS", 1000);
                         paused = 1;
-                        update_display("PAUS");
                 } else if(strcmp(method, "Player.OnStop") == 0) {
                         kill_prev(getpid());
-                        update_display("STOP");
-                        update_display("");
+                        update_display("STOP", 1000);
+                        update_display("", 0);
                 }
+
+                cJSON_Delete(c_root);
 
                 /* zero server_reply again */
                 for(i=0;i<sizeof(server_reply);i++) { server_reply[i] = 0x00; }
@@ -198,8 +199,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_SUCCESS);
 }
 
-int update_display(char *text) {
-
+void update_display(char *text, int delay_ms) {
         /* file pointer for display */
         FILE *fp_disp;
         /* error message */
@@ -218,8 +218,7 @@ int update_display(char *text) {
         /* Close file pointer */
         fclose(fp_disp);
 
-        sleep(1);
-        return 1;
+        usleep(delay_ms*1000);
 }
 
 void init_exit(int signum) {
@@ -229,7 +228,7 @@ void init_exit(int signum) {
 void kill_prev(int parent)  {
         /* don't kill our parent process */
         if(prev_pid != parent && prev_pid != 0) { 
-                kill(prev_pid, SIGKILL); 
+                kill(prev_pid, SIGTERM); 
                 waitpid(prev_pid, NULL, 0);
         }
 }

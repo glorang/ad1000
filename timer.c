@@ -86,9 +86,9 @@ int main(int argc, char *argv[]) {
                 /* Marquee title */
                 if(title_shown == 0) { title_shown = 1; update_display(argv[2], 1000); }
 
-                /* If we're a timer, request time @ API and update display */ 
-                if(strcmp(method, "TIMER") == 0) { 
-                        if(paused != 1) { 
+                if(paused != 1) { 
+                        /* If we're a timer, request time @ API and update display */ 
+                        if(strcmp(method, "TIMER") == 0) { 
 
                                 /* Enter endless loop by requesting each second current position */
                                 char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetProperties\", \"params\": { \"properties\": [\"time\"], \"playerid\": 0 }, \"id\": \"AudioGetItem\"}";
@@ -126,21 +126,22 @@ int main(int argc, char *argv[]) {
                                 }
 
                                 cJSON_Delete(c_root);
-                        } else {
-                                /* wait until we're waken from pause */
-                                sleep(1);
+
                         }
 
-                }
+                        /* If we're a clock count from 1000 to 0 and explode, just kidding, show a clock */
+                        if(strcmp(method, "CLOCK") == 0) { 
+                                time_t t = time(NULL);
+                                struct tm tm = *localtime(&t);
+                                char msg[4] = { 0x00 };
+                                sprintf(msg, "%02d.%02d", tm.tm_hour, tm.tm_min);
+                                update_display(msg, 0);
+                                sleep(60 - tm.tm_sec);
+                        }
 
-                /* If we're a clock count from 1000 to 0 and explode, just kidding, show a clock */
-                if(strcmp(method, "CLOCK") == 0) { 
-                        time_t t = time(NULL);
-                        struct tm tm = *localtime(&t);
-                        char msg[4] = { 0x00 };
-                        sprintf(msg, "%02d.%02d", tm.tm_hour, tm.tm_min);
-                        update_display(msg, 0);
-                        sleep(60 - tm.tm_sec);
+                } else {
+                        /* wait until we're waken from pause */
+                        sleep(1);
                 }
 
                 /* zero server_reply again */

@@ -27,6 +27,7 @@ volatile sig_atomic_t paused;
 
 pid_t prev_pid;
 void kill_prev(int parent);
+void fork_menu();
 
 int main(int argc, char *argv[]) {
 
@@ -71,6 +72,9 @@ int main(int argc, char *argv[]) {
 
         /* Empty display in case there is still something on it for whatever reason */
         update_display("", 0);
+
+        /* Show current selected item on display */
+        fork_menu();
 
         /* Main loop - Wait for data to arrive */    
         while(stop == 0) { 
@@ -185,6 +189,7 @@ int main(int argc, char *argv[]) {
                         kill_prev(getpid());
                         update_display("STOP", 1000);
                         update_display("", 0);
+                        fork_menu();
                 }
 
                 cJSON_Delete(c_root);
@@ -203,6 +208,20 @@ int main(int argc, char *argv[]) {
 
         exit(EXIT_SUCCESS);
 }
+
+void fork_menu() {
+
+        pid_t pid = fork();
+        if(pid == 0) {
+                char *cmd = "/usr/local/bin/menu";
+                char *cmd_args[] = { cmd, NULL};
+                execvp(cmd, cmd_args);
+                _exit(0);
+        } else { 
+                prev_pid = pid;
+        }
+}
+
 
 void update_display(char *text, int delay_ms) {
         /* file pointer for display */

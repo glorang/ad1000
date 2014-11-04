@@ -58,10 +58,10 @@ int main(int argc, char *argv[]) {
         connect(sock , (struct sockaddr *)&server , sizeof(server));
 
          
-        /* Main loop - increase timing counter */
+        /* Main loop */
         while(stop == 0) { 
 
-                /* Enter endless loop by requesting each second current item */
+                /* Enter endless loop by requesting each second current menu item */
                 char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"GUI.GetProperties\", \"params\": {\"properties\":[\"currentcontrol\"]}, \"id\": 1}";
 
                 if(send(sock, message, strlen(message), 0) < 0) {

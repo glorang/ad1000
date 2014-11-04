@@ -115,6 +115,11 @@ int main(int argc, char *argv[]) {
 
                                 /* if we're playing a movie show title at the beginning and show clock while playing */
                                 if(strcmp(type, "movie") == 0) {
+
+                                        if(c_title != NULL) {
+                                                strcpy(ptitle, c_title->valuestring);
+                                        }
+
                                         pid = fork();
                                         if(pid == 0) {
                                                 char *cmd = "/usr/local/bin/timer";

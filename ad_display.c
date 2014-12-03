@@ -28,6 +28,7 @@ volatile sig_atomic_t paused;
 pid_t prev_pid;
 void kill_prev(int parent);
 void fork_menu();
+void update_brightness(int level);
 
 int main(int argc, char *argv[]) {
 
@@ -190,6 +191,10 @@ int main(int argc, char *argv[]) {
                         update_display("STOP", 1000);
                         update_display("", 0);
                         fork_menu();
+                } else if(strcmp(method, "GUI.OnScreensaverActivated") == 0) {
+                        update_brightness(0);
+                } else if(strcmp(method, "GUI.OnScreensaverDeactivated") == 0) {
+                        update_brightness(2);
                 }
 
                 cJSON_Delete(c_root);
@@ -254,5 +259,15 @@ void kill_prev(int parent)  {
         if(prev_pid != parent && prev_pid != 0) { 
                 kill(prev_pid, SIGTERM); 
                 waitpid(prev_pid, NULL, 0);
+        }
+}
+
+void update_brightness(int level) {
+        FILE *fp_brightness;
+        fp_brightness = fopen(DEV_DISP_BRIGHTNESS, "w");
+        if(fp_brightness) { 
+                fprintf(fp_brightness, "%d\n", level);
+                fflush(fp_brightness);
+                fclose(fp_brightness);
         }
 }

@@ -380,6 +380,7 @@ int main(int argc, char *argv[]) {
                                         current_digit--;
                                 /* to enable the dot you need to flip the last bit (0000 0001) of it's value in digits[] */
                                 } else if(result[i] == '.') {
+                                        if(dig[current_digit] == 0x01) current_digit--;
                                         dig[current_digit] += 0x01;
                                 }
                         }

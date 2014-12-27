@@ -49,10 +49,10 @@ const char digits[] = { 0xFC, 0x60, 0xDA, 0xF2,         /* 0 1 2 3 */
 /* Define key names of buttons */
 /* Those should match with the config in lircd.conf */
 const char * keynames[] = { 
-         "KEY_LEFT", "KEY_OK",   "KEY_RIGHT", "KEY_UP", 
-         "KEY_DOWN", "KEY_MENU", "KEY_PAUSE", "KEY_RECORD",
-         "KEY_PREV", "KEY_PLAY", "KEY_NEXT",  "KEY_BACK",
-         "KEY_STOP", "KEY_EXIT", "KEY_POWER"
+         "KEY_LEFT",     "KEY_OK",   "KEY_RIGHT", "KEY_UP", 
+         "KEY_DOWN",     "KEY_MENU", "KEY_PAUSE", "KEY_RECORD",
+         "KEY_PREVIOUS", "KEY_PLAY", "KEY_NEXT",  "KEY_BACK",
+         "KEY_STOP",     "KEY_EXIT", "KEY_POWER"
 };
 
 /* Define scancode of each button */

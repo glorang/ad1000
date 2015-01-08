@@ -29,17 +29,9 @@ void toggle_pause();
 
 int main(int argc, char *argv[]) {
 
-        /* arg parsing */
-        if(argc < 3) { 
-                syslog(LOG_ERR, "not enough parameters provided"); 
-                exit(-1); 
-        }
-        char *method = (argv[1] == NULL) ? "" : argv[1];
-        int cur_track = (argv[3] == NULL) ? 1 : strtol(argv[3], NULL, 10);
-        int tot_track = (argv[4] == NULL) ? 1 : strtol(argv[4], NULL, 10);
+        char method[6] = { 0x00 };
         
-        /* only show track and title once */
-        int track_shown = 0; 
+        /* only show title once */
         int title_shown = 0;
 
         /* socket vars */
@@ -48,7 +40,7 @@ int main(int argc, char *argv[]) {
         char server_reply[2000] = { 0x00 };
 
         /* cJSON vars to parse JSON */
-        cJSON *c_root, *c_id, *c_result, *c_time, *c_milli, *c_minutes, *c_seconds;
+        cJSON *c_root, *c_id, *c_result, *c_time, *c_milli, *c_minutes, *c_seconds, *c_type, *c_label, *c_item, *c_arraysub;
 
         /* Open syslog */
         openlog("timer", LOG_PID|LOG_CONS, LOG_USER);
@@ -75,20 +67,60 @@ int main(int argc, char *argv[]) {
         /* Main loop - increase timing counter */
         while(stop == 0) { 
 
-                /* Show current_track.total_tracks */
-                if(track_shown == 0) { 
-                        track_shown = 1;
-                        char msg[4] = { 0x00 };
-                        sprintf(msg, "%02d.%02d", cur_track, tot_track);
-                        update_display(msg, 1000);
-                }
-
                 /* Marquee title */
-                if(title_shown == 0) { title_shown = 1; update_display(argv[2], 1000); }
+                if(title_shown == 0) { 
+                        title_shown = 1; 
+                        char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetActivePlayers\", \"id\": 1}";
+                        if(send(sock, message, strlen(message), 0) < 0) {
+                                syslog(LOG_ERR, "Could not write to socket");
+                        }
+
+                        if(recv(sock , server_reply , 2000 , 0) < 0) {
+                                syslog(LOG_ERR, "could not retrieve data from socket");
+                                break;
+                        }
+
+                        /* Parse JSON data */
+                        c_root = cJSON_Parse(server_reply);
+                        /* Get player type */
+                        if(c_root != NULL) c_result = cJSON_GetObjectItem(c_root,"result");
+                        if(c_result != NULL) c_arraysub = cJSON_GetArrayItem(c_result, 0);
+                        if(c_arraysub != NULL) c_type = cJSON_GetObjectItem(c_arraysub, "type");
+
+                        if(c_type != NULL) {
+                                if(strcmp(c_type->valuestring, "audio") == 0) {
+                                        strncpy(method, "AUDIO", 5);
+                                        char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetItem\", \"params\": { \"properties\": [\"title\", \"artist\"], \"playerid\": 0 }, \"id\": \"AudioGetItem\"}";
+                                        send(sock, message, strlen(message), 0);
+                                }
+
+                                if(strcmp(c_type->valuestring, "video") == 0) {
+                                        strncpy(method, "CLOCK", 5);
+                                        char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetItem\", \"params\": { \"properties\": [\"title\"], \"playerid\": 1 }, \"id\": \"VideoGetItem\"}";
+                                        send(sock, message, strlen(message), 0);
+                                }
+                                
+                                /* read back data */
+                                if(recv(sock , server_reply , 2000 , 0) < 0) {
+                                        syslog(LOG_ERR, "could not retrieve data from socket");
+                                        break;
+                                }
+
+                                /* Parse JSON data */
+                                c_root = cJSON_Parse(server_reply);
+                                if(c_root != NULL) c_result = cJSON_GetObjectItem(c_root,"result");
+                                if(c_result != NULL) c_item = cJSON_GetObjectItem(c_result,"item");
+                                if(c_item != NULL) c_label = cJSON_GetObjectItem(c_item,"label");
+                                update_display(c_label->valuestring, 1000); 
+
+                        }
+
+                        cJSON_Delete(c_root);
+                }
 
                 if(paused != 1) { 
                         /* If we're a timer, request time @ API and update display */ 
-                        if(strcmp(method, "TIMER") == 0) { 
+                        if(strcmp(method, "AUDIO") == 0) { 
 
                                 /* Enter endless loop by requesting each second current position */
                                 char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetProperties\", \"params\": { \"properties\": [\"time\"], \"playerid\": 0 }, \"id\": \"AudioGetItem\"}";

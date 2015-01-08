@@ -37,15 +37,9 @@ int main(int argc, char *argv[]) {
         struct sockaddr_in server;
         char server_reply[2000] = { 0x00 };
 
-        /* total tracks */ 
-        int playlist_item_count = 0;
-        /* current track */
-        int current_track;
-
         /* cJSON vars to parse JSON */
-        cJSON *c_root, *c_params, *c_data, *c_method, *c_item, *c_track, *c_artist, *c_artist_item, *c_title, *c_type;
-        char *method, *type;
-        char ptitle[100] = { 0x00 };
+        cJSON *c_root, *c_method;
+        char *method;
 
         /* pid to fork off timer helper */
         pid_t pid;
@@ -91,95 +85,24 @@ int main(int argc, char *argv[]) {
 
                 /* Check what event came in and update display as needed */
                 if(strcmp(method, "Playlist.OnClear") == 0) {
-                        /* reset vars */
-                        playlist_item_count = 0;
                         /* terminater timer process */
                         kill_prev(getpid());
-                } else if(strcmp(method, "Playlist.OnAdd") == 0) {
-                        playlist_item_count++;
-                } else if(strcmp(method, "Player.OnPlay") == 0) {
+               } else if(strcmp(method, "Player.OnPlay") == 0) {
 
-                        /* parse track, artist and title */
-                        if(c_root != NULL) c_params = cJSON_GetObjectItem(c_root,"params");
-                        if(c_params != NULL) c_data = cJSON_GetObjectItem(c_params,"data");
-                        if(c_data != NULL) c_item = cJSON_GetObjectItem(c_data,"item");
-                        if(c_item != NULL) c_type = cJSON_GetObjectItem(c_item,"type");
-                        if(c_item != NULL) c_track = cJSON_GetObjectItem(c_item,"track");
-                        if(c_item != NULL) c_title = cJSON_GetObjectItem(c_item,"title");
-                        if(c_item != NULL) c_artist = cJSON_GetObjectItem(c_item, "artist");
-                        if(c_artist != NULL) c_artist_item = cJSON_GetArrayItem(c_artist, 0);
+                        kill_prev(getpid());
 
-                        type = (c_type == NULL) ? "" : c_type->valuestring;
+                        pid = fork();
+                        if(pid == -1) {
+                                syslog(LOG_ERR, "fork failed!");
+                        }
 
-                        /* don't do anything when type is unkown (happens when you press play on a folder instead of item */
-                        if(strcmp(type, "unknown") == 0) continue;
-
-                        /* kill previous timer process when we're starting up or track changed */
-                        if( (strcmp(c_title->valuestring, ptitle) != 0) || paused == 0){
-                                kill_prev(getpid());
-
-                                /* if we're playing a movie show title at the beginning and show clock while playing */
-                                if(strcmp(type, "movie") == 0) {
-
-                                        if(c_title != NULL) {
-                                                strcpy(ptitle, c_title->valuestring);
-                                        }
-
-                                        pid = fork();
-                                        if(pid == 0) {
-                                                char *cmd = "/usr/local/bin/timer";
-                                                char *cmd_args[] = { cmd, "CLOCK", c_title->valuestring, NULL};
-                                                execvp(cmd, cmd_args);
-                                                _exit(0);
-                                        } else { 
-                                                prev_pid = pid;
-                                        }
-
-                                /* show title, currenttrack.totaltracks and start counter */
-                                } else if(strcmp(type, "song") == 0) {
-
-                                        char artist_title[1000] = { 0x00 };
-
-                                        if(c_artist != NULL) {
-                                                char *disp_artist = c_artist_item->valuestring;
-                                                strcpy(artist_title, disp_artist);
-                                        }
-
-                                        if(c_title != NULL) {
-                                                char *disp_title = c_title->valuestring; 
-                                                strcat(artist_title, " - ");
-                                                strcat(artist_title, disp_title);
-                                                strcpy(ptitle, disp_title);
-                                        }
-
-                                        if(c_track != NULL) {
-                                                current_track = c_track->valueint;
-                                        } else {
-                                                current_track = 1;
-                                        }
-
-                                        pid = fork();
-
-                                        if(pid == -1) {
-                                                syslog(LOG_ERR, "fork failed!");
-                                        }
-
-                                        if(pid == 0) {
-                                                char *cmd = "/usr/local/bin/timer";
-                                                char ct[4], tt[4];
-                                                sprintf(ct, "%d", current_track);
-                                                sprintf(tt, "%d", playlist_item_count);
-                                                char *cmd_args[] = { cmd, "TIMER", artist_title, ct, tt, NULL};
-                                                execvp(cmd, cmd_args);
-                                                _exit(0);
-                                        } else { 
-                                                prev_pid = pid;
-                                        }
-                                }                         
-                        } else {
-                                /* if we were previously paused just continue current timer by sending SIGUSR1 */
-                                kill(prev_pid, SIGUSR1);
-                                paused = 0;
+                        if(pid == 0) {
+                                char *cmd = "/usr/local/bin/timer";
+                                char *cmd_args[] = { cmd, NULL};
+                                execvp(cmd, cmd_args);
+                                _exit(0);
+                        } else { 
+                                prev_pid = pid;
                         }
 
                 } else if(strcmp(method, "Player.OnPause") == 0) {

@@ -19,6 +19,10 @@
 /* LIRC packet size */
 #define PACKET_SIZE 256
 
+/* timer methods */
+#define METHOD_AUDIO 1
+#define METHOD_VIDEO 2
+
 /*                                        */
 /* function definitions                   */
 /*                                        */

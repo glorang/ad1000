@@ -29,7 +29,7 @@ void toggle_pause();
 
 int main(int argc, char *argv[]) {
 
-        char method[6] = { 0x00 };
+        int method = 0;
         
         /* only show title once */
         int title_shown = 0;
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
         char server_reply[2000] = { 0x00 };
 
         /* cJSON vars to parse JSON */
-        cJSON *c_root, *c_id, *c_result, *c_time, *c_milli, *c_minutes, *c_seconds, *c_type, *c_label, *c_item, *c_arraysub;
+        cJSON *c_root, *c_id, *c_result, *c_time, *c_milli, *c_minutes, *c_seconds, *c_type, *c_label, *c_item, *c_arraysub, *c_artist, *c_artistarray, *c_title;
 
         /* Open syslog */
         openlog("timer", LOG_PID|LOG_CONS, LOG_USER);
@@ -88,14 +88,17 @@ int main(int argc, char *argv[]) {
                         if(c_arraysub != NULL) c_type = cJSON_GetObjectItem(c_arraysub, "type");
 
                         if(c_type != NULL) {
+
+                                /* if type is audio, ask for title and artist */
                                 if(strcmp(c_type->valuestring, "audio") == 0) {
-                                        strncpy(method, "AUDIO", 5);
+                                        method = METHOD_AUDIO;
                                         char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetItem\", \"params\": { \"properties\": [\"title\", \"artist\"], \"playerid\": 0 }, \"id\": \"AudioGetItem\"}";
                                         send(sock, message, strlen(message), 0);
                                 }
 
+                                /* if type is video, ask for title */
                                 if(strcmp(c_type->valuestring, "video") == 0) {
-                                        strncpy(method, "CLOCK", 5);
+                                        method = METHOD_VIDEO;
                                         char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetItem\", \"params\": { \"properties\": [\"title\"], \"playerid\": 1 }, \"id\": \"VideoGetItem\"}";
                                         send(sock, message, strlen(message), 0);
                                 }
@@ -110,8 +113,36 @@ int main(int argc, char *argv[]) {
                                 c_root = cJSON_Parse(server_reply);
                                 if(c_root != NULL) c_result = cJSON_GetObjectItem(c_root,"result");
                                 if(c_result != NULL) c_item = cJSON_GetObjectItem(c_result,"item");
-                                if(c_item != NULL) c_label = cJSON_GetObjectItem(c_item,"label");
-                                update_display(c_label->valuestring, 1000); 
+
+                                /* Update display with title */
+                                if(method == METHOD_VIDEO) {
+                                        if(c_item != NULL) { 
+                                                c_label = cJSON_GetObjectItem(c_item,"label");
+                                                update_display(c_label->valuestring, 1000); 
+                                        }
+                                }
+
+                                /* Update display with artist - title */
+                                if(method == METHOD_AUDIO) {
+                                        if(c_item != NULL) c_artist = cJSON_GetObjectItem(c_item,"artist");
+                                        if(c_item != NULL) c_title = cJSON_GetObjectItem(c_item,"title");
+                                        if(c_artist != NULL) c_artistarray = cJSON_GetArrayItem(c_artist, 0);
+
+                                        char artist_title[1000] = { 0x00 };
+
+                                        if(c_artistarray != NULL) {
+                                                char *disp_artist = c_artistarray->valuestring;
+                                                strcpy(artist_title, disp_artist);
+                                        }
+
+                                        if(c_title != NULL) {
+                                                char *disp_title = c_title->valuestring; 
+                                                strcat(artist_title, " - ");
+                                                strcat(artist_title, disp_title);
+                                        } 
+
+                                        update_display(artist_title, 1000);
+                                }
 
                         }
 
@@ -120,7 +151,7 @@ int main(int argc, char *argv[]) {
 
                 if(paused != 1) { 
                         /* If we're a timer, request time @ API and update display */ 
-                        if(strcmp(method, "AUDIO") == 0) { 
+                        if(method == METHOD_AUDIO) {
 
                                 /* Enter endless loop by requesting each second current position */
                                 char message[] = "{\"jsonrpc\": \"2.0\", \"method\": \"Player.GetProperties\", \"params\": { \"properties\": [\"time\"], \"playerid\": 0 }, \"id\": \"AudioGetItem\"}";
@@ -162,7 +193,7 @@ int main(int argc, char *argv[]) {
                         }
 
                         /* If we're a clock count from 1000 to 0 and explode, just kidding, show a clock */
-                        if(strcmp(method, "CLOCK") == 0) { 
+                        if(method == METHOD_VIDEO) {
                                 time_t t = time(NULL);
                                 struct tm tm = *localtime(&t);
                                 char msg[4] = { 0x00 };

@@ -217,12 +217,12 @@ int main(int argc, char *argv[]) {
         if(pid == 0) {
                 pid_display = fork();
                 if (pid_display < 0) {
-                        syslog(LOG_ERR, "Could not fork ad_display to background\n");
+                        syslog(LOG_ERR, "Could not fork api_display to background\n");
                         exit(EXIT_FAILURE);
                 } 
                 
                 if (pid_display == 0) {
-                        cmd = "/usr/local/bin/ad_display";
+                        cmd = "/usr/local/bin/api_display";
                         char *cmd_args[] = { cmd, NULL };
                         execvp(cmd, cmd_args);
                         _exit(1);

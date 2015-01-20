@@ -1,4 +1,4 @@
-/* ad_display.c                                                               */
+/* api_display.c                                                              */
 /*                                                                            */
 /* XBMC JSON-RPC API interface to ad1000 display                              */
 /*                                                                            */
@@ -42,11 +42,11 @@ int main(int argc, char *argv[]) {
         cJSON *c_root, *c_method;
         char *method;
 
-        /* pid to fork off timer helper */
+        /* pid to fork off media_info helper */
         pid_t pid;
 
         /* Open syslog */
-        openlog("ad_display", LOG_PID|LOG_CONS, LOG_USER);
+        openlog("api_display", LOG_PID|LOG_CONS, LOG_USER);
         syslog(LOG_INFO, "daemon starting up");
 
         /* Catch shutdown signals */
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
 
                 /* Check what event came in and update display as needed */
                 if(strcmp(method, "Playlist.OnClear") == 0) {
-                        /* terminater timer process */
+                        /* terminater media_info or menu process */
                         kill_prev(getpid());
                } else if(strcmp(method, "Player.OnPlay") == 0) {
 
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
                         }
 
                         if(pid == 0) {
-                                char *cmd = "/usr/local/bin/timer";
+                                char *cmd = "/usr/local/bin/media_info";
                                 char *cmd_args[] = { cmd, NULL};
                                 execvp(cmd, cmd_args);
                                 _exit(0);

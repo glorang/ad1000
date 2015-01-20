@@ -1,6 +1,7 @@
-/* timer.c                                                                    */
+/* media_info.c                                                               */
 /*                                                                            */
-/* Timer module for ad_display.c                                              */ 
+/* Helper daemon for api_display to display info about current playing        */
+/* item like playlist info, title, track, ...                                 */
 /*                                                                            */
 /* Author : Geert Lorang <geert |AT| lorang.be> - 2014-10-25                  */
 /*                                                                            */
@@ -46,7 +47,7 @@ int main(int argc, char *argv[]) {
         cJSON *c_root, *c_id, *c_result, *c_time, *c_milli, *c_minutes, *c_seconds, *c_type, *c_label, *c_item, *c_arraysub, *c_artist, *c_artistarray, *c_title, *c_items;
 
         /* Open syslog */
-        openlog("timer", LOG_PID|LOG_CONS, LOG_USER);
+        openlog("media_info", LOG_PID|LOG_CONS, LOG_USER);
         syslog(LOG_INFO, "daemon starting up");
 
         /* Catch shutdown signals */
@@ -182,7 +183,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 if(paused != 1) { 
-                        /* If we're a timer, request time @ API and update display */ 
+                        /* If we're playing music, request time @ API and update display */ 
                         if(method == METHOD_AUDIO) {
 
                                 /* Enter endless loop by requesting each second current position */

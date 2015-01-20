@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include "cJSON.h"
 #include "ad1000.h"
+#include "display.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
@@ -249,67 +250,6 @@ int main(int argc, char *argv[]) {
         /* Close syslog */
         closelog();
         exit(0);
-}
-
-void update_display(char *text, int delay_ms) {
-
-        /* file pointer for display */
-        FILE *fp_disp;
-        /* marquee counters */
-        int i,k;
-        /* dots in text counter */
-        int dots;
-        /* display text */
-        char disp[5]; disp[4] = '\0';
-        /* error message */
-        char errormsg[100];
-
-        /* Open display device */
-        fp_disp = fopen(DEV_DISP, "w");
-        if(!fp_disp) {
-                sprintf(errormsg, "Could not open display device file %s\n", DEV_DISP);
-                syslog(LOG_WARNING, errormsg);
-        }
-
-        /* calculate dots in text */
-        char *p=text;
-        for (dots=0; p[dots]; p[dots]=='.' ? dots++ : *p++);
-
-        if((strlen(text)-dots) <= 4) {
-                fprintf(fp_disp, "%s\n", text);
-                fflush(fp_disp);
-        } else {
-                /* marquee */
-                /* add 4 spaces at the end to complete the marquee effect */
-                int text_len = strlen(text) + 5;
-                char new_text[text_len]; new_text[text_len] = '\0';
-                strcpy(new_text, text);
-                strcat(new_text, "    ");
-                /* Marquee each 4 charachters and sleep 0.2s */
-                for(i=0;i<strlen(new_text);i++) {
-
-                        /* in case we're stopped or paused was pressed when we're marqueeing the title return immediately */
-                        if(paused == 1 || stop == 1) {
-                                fprintf(fp_disp, "\n");
-                                fflush(fp_disp);
-                                fclose(fp_disp);
-                                return;
-                        }
-
-                        for(k=0;k<4;k++) {
-                                disp[k] = new_text[i+k];
-                        }
-
-                        fprintf(fp_disp, "%s\n", disp);
-                        fflush(fp_disp);
-                        usleep(200000); 
-                }
-        }
-
-        usleep(delay_ms*1000);
-
-        /* Close file pointer */
-        fclose(fp_disp);
 }
 
 int writeReadSocket(int sock, char *message, char *server_reply) { 

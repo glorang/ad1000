@@ -20,6 +20,7 @@
 #include <syslog.h>
 #include "cJSON.h"
 #include "ad1000.h"
+#include "display.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
@@ -150,29 +151,6 @@ void fork_menu() {
         }
 }
 
-
-void update_display(char *text, int delay_ms) {
-        /* file pointer for display */
-        FILE *fp_disp;
-        /* error message */
-        char errormsg[100];
-
-        /* Open display device */
-        fp_disp = fopen(DEV_DISP, "w");
-        if(!fp_disp) {
-                sprintf(errormsg, "Could not open display device file %s\n", DEV_DISP);
-                syslog(LOG_WARNING, errormsg);
-        }
-
-        fprintf(fp_disp, "%s\n", text);
-        fflush(fp_disp);
-
-        /* Close file pointer */
-        fclose(fp_disp);
-
-        usleep(delay_ms*1000);
-}
-
 void init_exit(int signum) {
         stop = 1;
 }
@@ -182,15 +160,5 @@ void kill_prev(int parent)  {
         if(prev_pid != parent && prev_pid != 0) { 
                 kill(prev_pid, SIGTERM); 
                 waitpid(prev_pid, NULL, 0);
-        }
-}
-
-void update_brightness(int level) {
-        FILE *fp_brightness;
-        fp_brightness = fopen(DEV_DISP_BRIGHTNESS, "w");
-        if(fp_brightness) { 
-                fprintf(fp_brightness, "%d\n", level);
-                fflush(fp_brightness);
-                fclose(fp_brightness);
         }
 }

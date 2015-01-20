@@ -19,6 +19,7 @@
 #include <fcntl.h>
 #include "cJSON.h"
 #include "ad1000.h"
+#include "display.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
@@ -115,29 +116,6 @@ int main(int argc, char *argv[]) {
         /* Close syslog */
         closelog();
         exit(0);
-}
-
-
-void update_display(char *text, int delay_ms) {
-        /* file pointer for display */
-        FILE *fp_disp;
-        /* error message */
-        char errormsg[100];
-
-        /* Open display device */
-        fp_disp = fopen(DEV_DISP, "w");
-        if(!fp_disp) {
-                sprintf(errormsg, "Could not open display device file %s\n", DEV_DISP);
-                syslog(LOG_WARNING, errormsg);
-        }
-
-        fprintf(fp_disp, "%s\n", text);
-        fflush(fp_disp);
-
-        /* Close file pointer */
-        fclose(fp_disp);
-
-        usleep(delay_ms*1000);
 }
 
 void init_exit(int signum) {

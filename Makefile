@@ -15,13 +15,13 @@ lirc_led:
 	$(CC) $(CFLAGS) -o lirc_led lirc_led.c -llirc_client
 
 ad_display: 
-	$(CC) $(CFLAGS) -o ad_display ad_display.c cJSON.c -lm
+	$(CC) $(CFLAGS) -o ad_display ad_display.c cJSON.c display.c -lm
 
 timer: 
-	$(CC) $(CFLAGS) -o timer timer.c cJSON.c -lm
+	$(CC) $(CFLAGS) -o timer timer.c cJSON.c display.c -lm
 
 menu: 
-	$(CC) $(CFLAGS) -o menu menu.c cJSON.c -lm
+	$(CC) $(CFLAGS) -o menu menu.c cJSON.c display.c -lm
 
 clean:
 	rm -f ad1000 lirc_led ad_display timer menu

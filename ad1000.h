@@ -44,6 +44,3 @@ extern void spi_update();
 /* Set Display on/off */
 extern void setDisplayOn(int brightness);
 extern void setDisplayOff();
-
-/* write XBMC API data on display (ad_display.c) */
-extern void update_display(char *text, int delay_ms);

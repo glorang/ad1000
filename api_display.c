@@ -32,13 +32,12 @@ volatile sig_atomic_t paused;
 pid_t prev_pid;
 void kill_prev(int parent);
 int fork_daemon(char *cmd);
-void update_brightness(int level);
+int setup_xbmc_sock();
 
 int main(int argc, char *argv[]) {
 
         /* socket vars */
-        int sock, i;
-        struct sockaddr_in server;
+        int sock, i, bytes_read;
         char server_reply[2000] = { 0x00 };
 
         /* cJSON vars to parse JSON */
@@ -55,20 +54,12 @@ int main(int argc, char *argv[]) {
         signal(SIGTERM, init_exit);
 
         /* Open socket */
-        sock = socket(AF_INET , SOCK_STREAM , 0);
-        if (sock == -1) {
+        if((sock = setup_xbmc_sock()) < 0) {
                 syslog(LOG_ERR, "could not create socket");
         } 
 
-        /* Connect to XBMC JSON-RPC API */
-        server.sin_addr.s_addr = inet_addr("127.0.0.1");
-        server.sin_family = AF_INET;
-        server.sin_port = htons(9090);
-        connect(sock , (struct sockaddr *)&server , sizeof(server));
-
         /* Empty display in case there is still something on it for whatever reason */
         update_display("", 0);
-
 
 
 
@@ -128,10 +119,42 @@ int main(int argc, char *argv[]) {
 
         /* Main loop - Wait for data to arrive */    
         while(stop == 0) { 
-                if(recv(sock , server_reply , 2000 , 0) < 0) {
+                
+                bytes_read = recv(sock , server_reply , 2000 , 0);
+
+                if(bytes_read < 0) {
                         syslog(LOG_ERR, "could not retrieve data from socket");                
                         break;
                 } 
+
+                if(bytes_read == 0) {
+
+                        /* Socket is disconnected, wait 1s before retrying reconnect */
+                        sleep(1); 
+                        
+                        /* We enable LED3 (red) to indicate problem */
+                        set_led(DEV_LED3, 1);
+
+                        /* Close sock and kill previous menu/media_info daemon */
+                        close(sock);
+                        kill_prev(getpid());
+
+                        /* Try to reconnect every 5 seconds */
+                        while((sock = setup_xbmc_sock()) < 0) { 
+                                sleep(5);
+                        }
+
+                        /* Socket reconnected */
+
+                        /* Disable LED3 again */
+                        set_led(DEV_LED3, 0);
+
+                        /* respawn menu daemon */
+                        if(!fork_daemon(DAEMON_MENU)) {
+                                syslog(LOG_ERR, "could not fork menu daemon!");
+                        }
+
+                }
 
                 /* Data received - parse JSON */
                 c_root = cJSON_Parse(server_reply);
@@ -223,4 +246,26 @@ void kill_prev(int parent)  {
                 kill(prev_pid, SIGTERM); 
                 waitpid(prev_pid, NULL, 0);
         }
+}
+
+int setup_xbmc_sock() {
+        /* socket vars */
+        int sock;
+        struct sockaddr_in server;
+
+        /* Open socket */
+        if((sock = socket(AF_INET , SOCK_STREAM , 0)) < 0) {
+                return -1;
+        }
+
+        /* Connect to XBMC JSON-RPC API */
+        server.sin_addr.s_addr = inet_addr("127.0.0.1");
+        server.sin_family = AF_INET;
+        server.sin_port = htons(9090);
+
+        if(connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0) {
+                close(sock);
+                return -1;
+        }
+        return sock;
 }

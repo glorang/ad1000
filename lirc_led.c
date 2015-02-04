@@ -20,13 +20,12 @@
 
 /* exit on signal */
 volatile sig_atomic_t stop;
+int setup_lirc_sock();
 
 int main(int argc, char * argv[]) {
 
         /* file descriptor of lirc socket */
         int lirc_sock;
-        /* socket flags */
-        int lirc_flags;
         
         /* buffer for received IR code */
         ssize_t len;
@@ -47,17 +46,10 @@ int main(int argc, char * argv[]) {
         openlog("lirc_led", LOG_PID|LOG_CONS, LOG_USER);
         syslog(LOG_INFO, "daemon starting up");
         
-        /* Initiate LIRC */
-        if( (lirc_sock = lirc_init("lirc",1)) == -1) {
+        /* Initiate LIRC socket */
+        if((lirc_sock = setup_lirc_sock()) < 0) {
                 syslog(LOG_ERR, "lirc_init() failed");
                 exit(EXIT_FAILURE);
-        }
-        
-        /* Set lirc socket to NONBLOCK */ 
-        fcntl(lirc_sock,F_SETOWN,getpid());
-        lirc_flags=fcntl(lirc_sock,F_GETFL,0);
-        if(lirc_flags != -1) {
-                fcntl(lirc_sock,F_SETFL,lirc_flags|O_NONBLOCK);
         }
         
         /* catch shutdown signals */
@@ -77,6 +69,27 @@ int main(int argc, char * argv[]) {
                                 if(errno==EAGAIN) break;
                                 exit(EXIT_FAILURE);
                         }
+
+                        /* Socket disconnected */
+                        if(len == 0) {
+                                /* Socket is disconnected, wait 1s before retrying reconnect */
+                                sleep(1);
+
+                                /* We enable LED3 (red) to indicate problem */
+                                set_led(DEV_LED3, 1);
+
+                                /* Close sock */
+                                lirc_deinit();
+
+                                /* Try to reconnect every 5 seconds */
+                                while((lirc_sock = setup_lirc_sock()) < 0) {
+                                        sleep(5);
+                                }
+
+                                /* Socket reconnected - Disable LED3 again */
+                                set_led(DEV_LED3, 0);
+                        }
+
                         buffer[len+end_len]=0;
                         if(sscanf(buffer,"%x %x %s %s\n",&keycode, &rep,button,remote) == 4) {
 
@@ -120,4 +133,27 @@ int main(int argc, char * argv[]) {
 
 void init_exit(int signum) {
         stop = 1;
+}
+
+int setup_lirc_sock() {
+
+        /* file descriptor of lirc socket */
+        int lirc_sock;
+
+        /* socket flags */
+        int lirc_flags;
+
+        /* Initiate LIRC */
+        if( (lirc_sock = lirc_init("lirc",1)) == -1) {
+                return -1;
+        }
+
+        /* Set lirc socket to NONBLOCK */
+        fcntl(lirc_sock,F_SETOWN,getpid());
+        lirc_flags=fcntl(lirc_sock,F_GETFL,0);
+        if(lirc_flags != -1) {
+                fcntl(lirc_sock,F_SETFL,lirc_flags|O_NONBLOCK);
+        }
+
+        return lirc_sock;
 }

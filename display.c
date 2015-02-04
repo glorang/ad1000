@@ -89,3 +89,23 @@ void update_display(char *text, int delay_ms) {
                 fclose(fp_disp);
         }
 }
+
+int set_led(char * led, int state) {
+
+        /* file pointer for LED */
+        FILE *fp_led;
+
+        /* Open LED device file */ 
+        if((fp_led = fopen(led, "w")) < 0) { 
+                return -1;
+        }
+
+        /* Set led on or off */
+        fprintf(fp_led, "%d\n", state);
+        fflush(fp_led);
+
+        /* Close LED device file */
+        fclose(fp_led);
+
+        return 0;
+}

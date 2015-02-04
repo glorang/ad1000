@@ -12,7 +12,7 @@ ad1000:
 	$(CC) $(CFLAGS) -o ad1000 ad1000.c -lbcm2835 
 
 lirc_led: 
-	$(CC) $(CFLAGS) -o lirc_led lirc_led.c -llirc_client
+	$(CC) $(CFLAGS) -o lirc_led lirc_led.c display.c -llirc_client
 
 api_display: 
 	$(CC) $(CFLAGS) -o api_display api_display.c cJSON.c display.c -lm

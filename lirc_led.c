@@ -16,6 +16,7 @@
 #include <sys/prctl.h>
 #include <lirc/lirc_client.h>
 #include "ad1000.h"
+#include "display.h"
 
 /* exit on signal */
 volatile sig_atomic_t stop;
@@ -37,12 +38,6 @@ int main(int argc, char * argv[]) {
         int keycode, rep;
         char button[PACKET_SIZE+1];
         char remote[PACKET_SIZE+1];
-        
-        /* file pointer for LED */
-        FILE *fp_led; 
-        
-        /* error message */
-        char errormsg[100];
 
         /* vars for release (_UP) key */
         char *p;
@@ -51,20 +46,6 @@ int main(int argc, char * argv[]) {
         /* Open syslog */
         openlog("lirc_led", LOG_PID|LOG_CONS, LOG_USER);
         syslog(LOG_INFO, "daemon starting up");
-        
-        /* Open LED device file, but only if it exists */
-        if(access(DEV_LED2, F_OK) != -1) {
-                fp_led = fopen(DEV_LED2, "w");
-                if(!fp_led) { 
-                        sprintf(errormsg, "Could not open LED device file %s\n", DEV_LED2); 
-                        syslog(LOG_ERR, errormsg);
-                        exit(EXIT_FAILURE);
-                }
-        } else {
-                sprintf(errormsg, "Could not open LED device file %s\n", DEV_LED2); 
-                syslog(LOG_ERR, errormsg);
-                exit(EXIT_FAILURE);
-        }
         
         /* Initiate LIRC */
         if( (lirc_sock = lirc_init("lirc",1)) == -1) {
@@ -114,11 +95,10 @@ int main(int argc, char * argv[]) {
                                 }
         
                                 if(pos > 5) {
-                                        fprintf(fp_led, "%d\n", 0);
+                                        set_led(DEV_LED2, 0);
                                 } else {
-                                        fprintf(fp_led, "%d\n", 1);
+                                        set_led(DEV_LED2, 1);
                                 }
-                                fflush(fp_led);
                          }
                 }
                 while(len!=0);
@@ -127,10 +107,7 @@ int main(int argc, char * argv[]) {
         } 
         
         syslog(LOG_INFO, "caught exit signal - shutting down");
-         
-        /* Close LED device file */
-        fclose(fp_led);
-        
+
         /* Close LIRC connection */
         lirc_deinit();
 

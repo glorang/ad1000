@@ -54,8 +54,8 @@ int main(int argc, char *argv[]) {
         signal(SIGTERM, init_exit);
 
         /* Open socket */
-        if((sock = setup_xbmc_sock()) < 0) {
-                syslog(LOG_ERR, "could not create socket");
+        while((sock = setup_xbmc_sock()) < 0) {
+                sleep(5);
         } 
 
         /* Empty display in case there is still something on it for whatever reason */

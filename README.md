@@ -42,12 +42,12 @@ The ad1000 daemon will spawn off 2 childeren by default:
 - lirc_led : this will flash LED2 each time an IR signal is received
 - api_display : this will connect to XBMC's TCP socket and listen for events (START/STOP/PAUSE/...)
 
-                Whenever something (music/video) is starting a child called media_info will be spawned.
-		This will show some info about the media being played : 
-		  - For music : track in playlist, artist - title, current position in track
-		  - For video : movie's title / filename
+Whenever something (music/video) is starting a child called media_info will be spawned.
+This will show some info about the media being played : 
+- For music : track in playlist, artist - title, current position in track
+- For video : movie's title / filename
 
-		When nothing is playing a child called 'menu' will be spawned that show current selected menu item in XBMC
+When nothing is playing a child called 'menu' will be spawned that show current selected menu item in XBMC
 
 License
 =======

@@ -3,6 +3,8 @@ ad1000
 
 Telenet AD1000 Frontpanel Pseudo Driver
 
+More info on http://lorang.be/ad1000
+
 Installation
 ============
 
@@ -14,8 +16,8 @@ After that:
        git clone git://github.com/glorang/ad1000
        make
        make install
-       /usr/local/bin/ad1000
-
+       mv ad1000.conf /etc/init (upstart)
+       start ad1000
 
 Usage
 =====
@@ -38,14 +40,14 @@ The dot can be enabled by adding a dot in the input string. e.g. 'echo 12.34 > /
 The ad1000 daemon will spawn off 2 childeren by default:
 
 - lirc_led : this will flash LED2 each time an IR signal is received
-- ad_display : this will connect to XBMC's TCP socket and update the display when:
+- api_display : this will connect to XBMC's TCP socket and listen for events (START/STOP/PAUSE/...)
 
-	- you press PLAY/PAUSE/STOP 
+                Whenever something (music/video) is starting a child called media_info will be spawned.
+		This will show some info about the media being played : 
+		  - For music : track in playlist, artist - title, current position in track
+		  - For video : movie's title / filename
 
-	- music is playing it will marquee "artist - title" after which it will update to <current track>.<total tracks>
-
-	- a video is playing it will marquee the filename
-
+		When nothing is playing a child called 'menu' will be spawned that show current selected menu item in XBMC
 
 License
 =======

@@ -27,8 +27,8 @@ volatile sig_atomic_t stop;
 int main(int argc, char *argv[]) {
 
         /* display vars */
-        char disp[5] = { 0x00 };
-        char p_disp[5] = { 0x00 };
+        char disp[9] = { 0x00 };
+        char p_disp[9] = { 0x00 };
 
         /* socket vars */
         int sock, i;
@@ -88,10 +88,18 @@ int main(int argc, char *argv[]) {
                 if(c_cc != NULL) c_label = cJSON_GetObjectItem(c_cc,"label");
                 
                 if(c_label != NULL) { 
-                        c_label->valuestring[0] == '[' ? strncpy(disp, c_label->valuestring+1, 4) : strncpy(disp, c_label->valuestring, 4);
+                        /* calculate dots in menu label */
+                        int i = 0, dots = 0;
+                        char *p = c_label->valuestring;
+                        while(*p && i < 8) { i++; if (*p++ == '.') { ++dots; } }
+                
+                        c_label->valuestring[0] == '[' ? strncpy(disp, c_label->valuestring+1, 4+dots) : strncpy(disp, c_label->valuestring, 4+dots);
+
+                        /* empty end of disp[] in case previous entry was longer than current one */
+                        for(i=4+dots;i<8;i++) { disp[i] = 0x00; }
 
                         if(strcmp(disp, p_disp) != 0) { 
-                                strncpy(p_disp, disp, 4);
+                                strncpy(p_disp, disp, 4+dots);
                                 update_display(disp, 0);
                         }
                 }

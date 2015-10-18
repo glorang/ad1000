@@ -91,6 +91,7 @@ int main(int argc, char *argv[]) {
                         if(c_type != NULL) {
                                 if(strcmp(c_type->valuestring, "audio") == 0) { method = METHOD_AUDIO; } 
                                 if(strcmp(c_type->valuestring, "video") == 0) { method = METHOD_VIDEO; } 
+                                if(strcmp(c_type->valuestring, "episode") == 0) { method = METHOD_VIDEO; } 
                         }
 
                         cJSON_Delete(c_root);
